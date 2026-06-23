@@ -27,7 +27,9 @@ def _is_success_status(status_code: int) -> bool:
 
 
 def _aegis_metadata(response_body: dict[str, Any]) -> dict[str, Any]:
-    metadata = response_body.get("aegis", {})
+    if "aegis" not in response_body:
+        raise ValueError("expected 'aegis' to be present")
+    metadata = response_body["aegis"]
     if not isinstance(metadata, dict):
         raise ValueError("expected 'aegis' to be an object")
     return cast(dict[str, Any], metadata)
@@ -61,7 +63,9 @@ def _assistant_content(response_body: dict[str, Any]) -> str | None:
 
 
 def _detector_results(aegis_metadata: dict[str, Any]) -> list[DetectorResult]:
-    detector_payloads = aegis_metadata.get("detector_results", [])
+    if "detector_results" not in aegis_metadata:
+        raise ValueError("expected 'aegis.detector_results' to be present")
+    detector_payloads = aegis_metadata["detector_results"]
     if not isinstance(detector_payloads, list):
         raise ValueError("expected 'aegis.detector_results' to be a list")
 
@@ -70,10 +74,13 @@ def _detector_results(aegis_metadata: dict[str, Any]) -> list[DetectorResult]:
         if not isinstance(detector_payload, dict):
             raise ValueError(f"expected 'aegis.detector_results[{index}]' to be an object")
 
-        detector_name = detector_payload.get(
-            "name",
-            detector_payload.get("detector_name", "unknown"),
-        )
+        detector_name = detector_payload.get("detector_name")
+        if detector_name is None:
+            detector_name = detector_payload.get("name")
+        if detector_name is None:
+            raise ValueError(
+                f"expected 'aegis.detector_results[{index}].detector_name' to be present"
+            )
         if not isinstance(detector_name, str):
             raise ValueError(f"expected 'aegis.detector_results[{index}].detector_name' to be a string")
 
@@ -91,13 +98,15 @@ def _detector_results(aegis_metadata: dict[str, Any]) -> list[DetectorResult]:
 
 
 def _policy_decision(aegis_metadata: dict[str, Any]) -> PolicyDecision | None:
-    policy_payload = aegis_metadata.get("policy_decision")
-    if policy_payload is None:
-        return None
+    if "policy_decision" not in aegis_metadata:
+        raise ValueError("expected 'aegis.policy_decision' to be present")
+    policy_payload = aegis_metadata["policy_decision"]
     if not isinstance(policy_payload, dict):
         raise ValueError("expected 'aegis.policy_decision' to be an object")
 
-    final_action = policy_payload.get("final_action", "unknown")
+    if "final_action" not in policy_payload:
+        raise ValueError("expected 'aegis.policy_decision.final_action' to be present")
+    final_action = policy_payload["final_action"]
     if not isinstance(final_action, str):
         raise ValueError("expected 'aegis.policy_decision.final_action' to be a string")
 

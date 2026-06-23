@@ -286,3 +286,158 @@ def test_http_target_reports_malformed_policy_decision() -> None:
             "Malformed target response on turn 1: expected 'aegis.policy_decision' to be an object"
         ]
         target.close()
+
+
+def test_http_target_reports_missing_aegis_metadata() -> None:
+    base_url = "http://localhost:8000"
+
+    scenario = Scenario(
+        name="test_missing_aegis",
+        turns=[Turn(role="user", content="hello")],
+        target_controls=TargetControls(),
+    )
+
+    with respx.mock:
+        respx.post(f"{base_url}/v1/chat/completions").mock(
+            return_value=Response(
+                200,
+                json={"choices": [{"message": {"content": "mocked response"}}]},
+            )
+        )
+
+        target = HttpAegisTarget(base_url)
+        result = target.run_scenario(scenario)
+
+        assert result.passed is False
+        assert result.turn_results == []
+        assert result.failures == ["Malformed target response on turn 1: expected 'aegis' to be present"]
+        target.close()
+
+
+def test_http_target_reports_missing_detector_results() -> None:
+    base_url = "http://localhost:8000"
+
+    scenario = Scenario(
+        name="test_missing_detectors",
+        turns=[Turn(role="user", content="hello")],
+        target_controls=TargetControls(),
+    )
+
+    with respx.mock:
+        respx.post(f"{base_url}/v1/chat/completions").mock(
+            return_value=Response(
+                200,
+                json={
+                    "choices": [{"message": {"content": "mocked response"}}],
+                    "aegis": {"policy_decision": {"final_action": "allow"}},
+                },
+            )
+        )
+
+        target = HttpAegisTarget(base_url)
+        result = target.run_scenario(scenario)
+
+        assert result.passed is False
+        assert result.turn_results == []
+        assert result.failures == [
+            "Malformed target response on turn 1: expected 'aegis.detector_results' to be present"
+        ]
+        target.close()
+
+
+def test_http_target_reports_missing_detector_name() -> None:
+    base_url = "http://localhost:8000"
+
+    scenario = Scenario(
+        name="test_missing_detector_name",
+        turns=[Turn(role="user", content="hello")],
+        target_controls=TargetControls(),
+    )
+
+    with respx.mock:
+        respx.post(f"{base_url}/v1/chat/completions").mock(
+            return_value=Response(
+                200,
+                json={
+                    "choices": [{"message": {"content": "mocked response"}}],
+                    "aegis": {
+                        "detector_results": [{"evidence": {}}],
+                        "policy_decision": {"final_action": "block"},
+                    },
+                },
+            )
+        )
+
+        target = HttpAegisTarget(base_url)
+        result = target.run_scenario(scenario)
+
+        assert result.passed is False
+        assert result.turn_results == []
+        assert result.failures == [
+            "Malformed target response on turn 1: "
+            "expected 'aegis.detector_results[0].detector_name' to be present"
+        ]
+        target.close()
+
+
+def test_http_target_reports_missing_policy_decision() -> None:
+    base_url = "http://localhost:8000"
+
+    scenario = Scenario(
+        name="test_missing_policy",
+        turns=[Turn(role="user", content="hello")],
+        target_controls=TargetControls(),
+    )
+
+    with respx.mock:
+        respx.post(f"{base_url}/v1/chat/completions").mock(
+            return_value=Response(
+                200,
+                json={
+                    "choices": [{"message": {"content": "mocked response"}}],
+                    "aegis": {"detector_results": []},
+                },
+            )
+        )
+
+        target = HttpAegisTarget(base_url)
+        result = target.run_scenario(scenario)
+
+        assert result.passed is False
+        assert result.turn_results == []
+        assert result.failures == [
+            "Malformed target response on turn 1: expected 'aegis.policy_decision' to be present"
+        ]
+        target.close()
+
+
+def test_http_target_reports_missing_policy_final_action() -> None:
+    base_url = "http://localhost:8000"
+
+    scenario = Scenario(
+        name="test_missing_final_action",
+        turns=[Turn(role="user", content="hello")],
+        target_controls=TargetControls(),
+    )
+
+    with respx.mock:
+        respx.post(f"{base_url}/v1/chat/completions").mock(
+            return_value=Response(
+                200,
+                json={
+                    "choices": [{"message": {"content": "mocked response"}}],
+                    "aegis": {"detector_results": [], "policy_decision": {}},
+                },
+            )
+        )
+
+        target = HttpAegisTarget(base_url)
+        result = target.run_scenario(scenario)
+
+        assert result.passed is False
+        assert result.turn_results == []
+        assert result.failures == [
+            "Malformed target response on turn 1: "
+            "expected 'aegis.policy_decision.final_action' to be present"
+        ]
+        target.close()
