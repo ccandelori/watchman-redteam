@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List
 
 from aegis_redteam.models import RedteamResult
 
 
-def generate_markdown_report(results: List[RedteamResult], output_path: Path) -> None:
+def generate_markdown_report(results: list[RedteamResult], output_path: Path) -> None:
     """Generate a simple Markdown report from results."""
     lines = ["# Redteam Report\n"]
 
@@ -14,8 +13,8 @@ def generate_markdown_report(results: List[RedteamResult], output_path: Path) ->
     lines.append(f"**Passed:** {passed}/{len(results)}\n")
 
     for result in results:
-        status = "✅ Passed" if result.passed else "❌ Failed"
-        lines.append(f"## {result.scenario_name} — {status}\n")
+        status = "PASS" if result.passed else "FAIL"
+        lines.append(f"## {result.scenario_name} - {status}\n")
 
         for tr in result.turn_results:
             policy = tr.policy_decision.final_action if tr.policy_decision else "-"

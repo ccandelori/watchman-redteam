@@ -12,7 +12,7 @@ turns:
 
 expected:
   detectors:
-    - name: encoded_canary
+    - name: text_canary
       should_trigger: true
   policy:
     min_final_action: block

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from typing import Literal, Optional, List, Dict, Any
+from typing import Any, Literal
+
 from pydantic import BaseModel, Field
 
 
 class Turn(BaseModel):
-    role: Literal["user", "assistant"]
+    role: Literal["system", "user", "assistant", "tool"]
     content: str
 
 
@@ -19,43 +20,47 @@ class PolicyExpectation(BaseModel):
 
 
 class Expected(BaseModel):
-    detectors: List[DetectorExpectation] = Field(default_factory=list)
-    policy: Optional[PolicyExpectation] = None
+    detectors: list[DetectorExpectation] = Field(default_factory=list)
+    policy: PolicyExpectation | None = None
 
 
 class TargetControls(BaseModel):
-    mock_response_mode: Optional[str] = None
+    mock_response_mode: str | None = None
     reset_before_run: bool = False
-    session_id: Optional[str] = None
+    session_id: str | None = None
 
 
 class Scenario(BaseModel):
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     target_controls: TargetControls = Field(default_factory=TargetControls)
-    turns: List[Turn]
-    expected: Optional[Expected] = None
+    turns: list[Turn]
+    expected: Expected | None = None
 
 
 class DetectorResult(BaseModel):
     name: str
-    evidence: Dict[str, Any] = Field(default_factory=dict)
+    score: float | None = None
+    recommended_action: str | None = None
+    capability_status: str | None = None
+    evidence: dict[str, Any] = Field(default_factory=dict)
 
 
 class PolicyDecision(BaseModel):
     final_action: str
-    reason: Optional[str] = None
+    reason: str | None = None
+    evidence: dict[str, Any] = Field(default_factory=dict)
 
 
 class TurnResult(BaseModel):
     turn_index: int
     request: Turn
     response_status: int
-    assistant_content: Optional[str] = None
-    aegis_metadata: Dict[str, Any] = Field(default_factory=dict)
-    detector_results: List[DetectorResult] = Field(default_factory=list)
-    policy_decision: Optional[PolicyDecision] = None
-    latency_ms: Optional[int] = None
+    assistant_content: str | None = None
+    aegis_metadata: dict[str, Any] = Field(default_factory=dict)
+    detector_results: list[DetectorResult] = Field(default_factory=list)
+    policy_decision: PolicyDecision | None = None
+    latency_ms: int | None = None
 
 
 class RedteamResult(BaseModel):
@@ -65,6 +70,6 @@ class RedteamResult(BaseModel):
     started_at: str
     finished_at: str
     passed: bool
-    turn_results: List[TurnResult] = Field(default_factory=list)
-    failures: List[str] = Field(default_factory=list)
-    raw_responses: List[Dict[str, Any]] = Field(default_factory=list)
+    turn_results: list[TurnResult] = Field(default_factory=list)
+    failures: list[str] = Field(default_factory=list)
+    raw_responses: list[dict[str, Any]] = Field(default_factory=list)

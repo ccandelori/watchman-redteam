@@ -19,9 +19,7 @@ This document defines the HTTP interface that Aegis exposes for black-box intera
 
 ```json
 {
-  "status": "ok",
-  "version": "0.1.0",
-  "capabilities": ["cift", "dp_honey", "nimbus"]
+  "status": "ok"
 }
 ```
 
@@ -35,17 +33,25 @@ Standard OpenAI format is accepted:
 
 ```json
 {
-  "model": "gpt-4o-mini",
+  "model": "mock-model",
   "messages": [
     {"role": "system", "content": "..."},
     {"role": "user", "content": "..."}
   ],
-  "tools": [...],
-  "temperature": 0.7
+  "metadata": {
+    "trace_id": "trace-abc123",
+    "session_id": "sess-xyz789",
+    "turn_index": 1,
+    "mock_response_mode": "base64_first_honeytoken"
+  }
 }
 ```
 
-Aegis does not require any custom fields in the request for basic operation.
+The `metadata` object is optional for basic operation. The redteam runner uses
+it to pass deterministic development controls to Aegis. Supported
+`mock_response_mode` values are `default`, `echo_last_user`,
+`leak_first_honeytoken`, `base64_first_honeytoken`, and
+`partial_first_honeytoken`.
 
 #### Response
 
@@ -55,8 +61,7 @@ The response follows the OpenAI format but adds an `aegis` top-level field:
 {
   "id": "chatcmpl-...",
   "object": "chat.completion",
-  "created": 1712345678,
-  "model": "gpt-4o-mini",
+  "model": "mock-model",
   "choices": [
     {
       "index": 0,
@@ -67,38 +72,41 @@ The response follows the OpenAI format but adds an `aegis` top-level field:
       "finish_reason": "stop"
     }
   ],
-  "usage": { ... },
   "aegis": {
     "trace_id": "trace-abc123",
-    "session_id": "sess-xyz789",
-    "turn_index": 3,
-    "detectors": [
+    "detector_results": [
       {
-        "name": "TextCanaryDetector",
-        "triggered": false,
-        "evidence": {}
+        "detector_name": "encoded_canary",
+        "component": "text_canary",
+        "score": 1.0,
+        "confidence": 1.0,
+        "recommended_action": "escalate",
+        "capability_required": null,
+        "capability_status": "active",
+        "evidence": {
+          "reason": "encoded_canary_leak_detected"
+        },
+        "latency_ms": 0.0
       },
       {
-        "name": "CiftRuntimeDetector",
-        "triggered": true,
+        "detector_name": "nimbus",
+        "component": "nimbus",
+        "score": 1.0,
+        "confidence": 0.8,
+        "recommended_action": "block",
+        "capability_required": null,
+        "capability_status": "active",
         "evidence": {
-          "cift_window_family": "selected_choice",
-          "score": 0.87,
-          "degradation_reason": null
-        }
+          "turn_estimated_leakage_bits": 0.4,
+          "cumulative_estimated_leakage_bits": 1.2
+        },
+        "latency_ms": 0.0
       }
     ],
-    "policy": {
-      "decision": "allow",
-      "reason": "no_violation"
-    },
-    "canaries": {
-      "total_detected": 0,
-      "by_type": {}
-    },
-    "nimbus": {
-      "session_budget_used": 0.12,
-      "session_budget_limit": 1.0
+    "policy_decision": {
+      "final_action": "block",
+      "reasons": ["detector_recommended_block"],
+      "evidence": {}
     }
   }
 }
@@ -127,24 +135,58 @@ Returns recent audit events (useful for red team analysis).
 }
 ```
 
+### `POST /test/reset`
+
+Development-only route used to isolate repeatable redteam runs.
+
+**Request**
+
+```json
+{
+  "session_id": "sess-xyz789"
+}
+```
+
+**Response**
+
+```json
+{
+  "status": "reset",
+  "audit_events_cleared": true,
+  "session_id": "sess-xyz789"
+}
+```
+
 ## Error Responses
 
 | Status | Description | Body |
 |--------|-------------|------|
-| 400    | Bad Request | `{ "error": { "message": "..." } }` |
-| 500    | Internal Error | `{ "error": { "message": "..." } }` |
+| 400    | Bad Request | `{ "error": "..." }` |
+| 500    | Internal Error | `{ "error": "..." }` |
 
 ## Authentication (Future)
 
 - Currently none.
 - Future versions may support an `Authorization: Bearer <token>` header.
 
+## Credential Placeholders
+
+Redteam scenarios can ask Aegis to plant fake honeytokens by including a
+credential placeholder in a chat message:
+
+```text
+{{CREDENTIAL:repo_pat:github_pat}}
+```
+
+Aegis replaces the placeholder before model generation. Scenario content should
+not contain raw production secrets.
+
 ## Non-Goals (v0)
 
 - Real model inference (mock provider is acceptable)
 - Persistent storage of traces
-- Multi-turn session management on the server side (redteam handles this)
+- Production use of deterministic mock response controls
 
 ---
 
-This contract will be used as the specification for `HttpAegisTarget`. The `InProcessAegisTarget` should aim to produce responses that are structurally compatible with this shape.
+This contract is the specification for `HttpAegisTarget`.
