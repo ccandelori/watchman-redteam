@@ -27,3 +27,6 @@ jobs:
 
       - name: Run mypy
         run: uv run --extra dev mypy src tests
+
+      - name: Build package
+        run: uv build
