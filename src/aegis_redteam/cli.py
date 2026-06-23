@@ -9,6 +9,7 @@ from rich.table import Table
 
 from aegis_redteam.scenarios.loader import load_scenarios, load_scenario
 from aegis_redteam.runner import run_scenarios
+from aegis_redteam.report import generate_markdown_report
 
 app = typer.Typer(help="Aegis Redteam Runner")
 console = Console()
@@ -113,6 +114,22 @@ def view(results_file: Path):
             table.add_row(data["scenario_name"], status, policy)
 
     console.print(table)
+
+
+@app.command()
+def report(results_file: Path, output: Path = typer.Argument(..., help="Output Markdown file")):
+    """Generate a Markdown report from a JSONL results file."""
+    from aegis_redteam.models import RedteamResult
+    import json
+
+    results = []
+    with results_file.open() as f:
+        for line in f:
+            data = json.loads(line)
+            results.append(RedteamResult.model_validate(data))
+
+    generate_markdown_report(results, output)
+    console.print(f"Report written to {output}")
 
 
 if __name__ == "__main__":
