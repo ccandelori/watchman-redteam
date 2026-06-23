@@ -30,17 +30,28 @@ def run(
 
     table = Table(title="Redteam Results")
     table.add_column("Scenario", style="cyan")
-    table.add_column("Passed", style="green")
+    table.add_column("Passed", justify="center")
     table.add_column("Turns")
-    table.add_column("Failures")
+    table.add_column("Detectors Fired")
+    table.add_column("Policy")
 
     for result in results:
-        status = "✅" if result.passed else "❌"
+        status = "[green]✅[/green]" if result.passed else "[red]❌[/red]"
+
+        detectors_fired = []
+        policy_action = "-"
+        for turn in result.turn_results:
+            for d in turn.detector_results:
+                detectors_fired.append(d.name)
+            if turn.policy_decision:
+                policy_action = turn.policy_decision.final_action
+
         table.add_row(
             result.scenario_name,
             status,
             str(len(result.turn_results)),
-            str(len(result.failures)),
+            ", ".join(detectors_fired) if detectors_fired else "-",
+            policy_action,
         )
 
     console.print(table)
