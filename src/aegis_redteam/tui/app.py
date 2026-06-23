@@ -54,6 +54,11 @@ def load_results(path: Path) -> List[RedteamResult]:
 
 
 if __name__ == "__main__":
-    # Example usage
-    app = RedteamTUI()
+    # Example usage: python -m aegis_redteam.tui.app results/example.jsonl
+    import sys
+    if len(sys.argv) > 1:
+        results = load_results(Path(sys.argv[1]))
+        app = RedteamTUI(results)
+    else:
+        app = RedteamTUI()
     app.run()
