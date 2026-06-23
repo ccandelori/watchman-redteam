@@ -1,9 +1,33 @@
+import importlib.util
+from collections.abc import Callable, Sequence
 from pathlib import Path
+from types import ModuleType
+from typing import Protocol, cast
 
 import pytest
 
 from aegis_redteam.models import RedteamResult, Scenario, Turn
-from examples import run_example
+
+
+class RunExampleModule(Protocol):
+    TARGET_ENV_VAR: str
+    target_url_from_args: Callable[[Sequence[str]], str]
+    main: Callable[[Sequence[str]], int]
+
+
+def load_run_example_module() -> RunExampleModule:
+    module_path = Path(__file__).parents[1] / "examples" / "run_example.py"
+    spec = importlib.util.spec_from_file_location("run_example_under_test", module_path)
+    if spec is None:
+        raise RuntimeError(f"Could not create import spec for {module_path}")
+    if spec.loader is None:
+        raise RuntimeError(f"Import spec has no loader for {module_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return cast(RunExampleModule, module)
+
+
+run_example = load_run_example_module()
 
 
 def make_result(passed: bool) -> RedteamResult:
@@ -60,9 +84,9 @@ def test_main_returns_nonzero_when_scenarios_fail(monkeypatch: pytest.MonkeyPatc
         seen_summary_counts.append(len(results))
 
     monkeypatch.setenv(run_example.TARGET_ENV_VAR, "http://env.example")
-    monkeypatch.setattr(run_example, "load_scenarios", fake_load_scenarios)
-    monkeypatch.setattr(run_example, "run_scenarios", fake_run_scenarios)
-    monkeypatch.setattr(run_example, "print_summary", fake_print_summary)
+    monkeypatch.setattr(cast(ModuleType, run_example), "load_scenarios", fake_load_scenarios)
+    monkeypatch.setattr(cast(ModuleType, run_example), "run_scenarios", fake_run_scenarios)
+    monkeypatch.setattr(cast(ModuleType, run_example), "print_summary", fake_print_summary)
 
     exit_code = run_example.main(["examples/run_example.py"])
 
@@ -86,9 +110,9 @@ def test_main_returns_zero_when_scenarios_pass(monkeypatch: pytest.MonkeyPatch) 
     def fake_print_summary(results: list[RedteamResult]) -> None:
         assert len(results) == 1
 
-    monkeypatch.setattr(run_example, "load_scenarios", fake_load_scenarios)
-    monkeypatch.setattr(run_example, "run_scenarios", fake_run_scenarios)
-    monkeypatch.setattr(run_example, "print_summary", fake_print_summary)
+    monkeypatch.setattr(cast(ModuleType, run_example), "load_scenarios", fake_load_scenarios)
+    monkeypatch.setattr(cast(ModuleType, run_example), "run_scenarios", fake_run_scenarios)
+    monkeypatch.setattr(cast(ModuleType, run_example), "print_summary", fake_print_summary)
 
     exit_code = run_example.main(["examples/run_example.py", "http://cli.example"])
 
