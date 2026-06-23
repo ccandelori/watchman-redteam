@@ -22,6 +22,10 @@ def _response_body(response: httpx.Response) -> dict[str, Any]:
     return {"body": payload}
 
 
+def _is_success_status(status_code: int) -> bool:
+    return 200 <= status_code < 300
+
+
 def _aegis_metadata(response_body: dict[str, Any]) -> dict[str, Any]:
     metadata = response_body.get("aegis", {})
     if not isinstance(metadata, dict):
@@ -152,7 +156,7 @@ class HttpAegisTarget:
             try:
                 reset_response = self.client.post(reset_url, json={})
                 reset_body = redact_secrets(_response_body(reset_response))
-                if reset_response.status_code >= 400:
+                if not _is_success_status(reset_response.status_code):
                     failures.append(
                         f"Reset returned HTTP {reset_response.status_code} from {reset_url}: "
                         f"{reset_body}"
@@ -183,7 +187,7 @@ class HttpAegisTarget:
                 raw = _response_body(resp)
                 raw_responses.append(redact_secrets(raw))
 
-                if resp.status_code >= 400:
+                if not _is_success_status(resp.status_code):
                     failures.append(
                         f"Turn {idx} returned HTTP {resp.status_code} from {chat_url}: "
                         f"{redact_secrets(raw)}"

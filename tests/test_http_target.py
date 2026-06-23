@@ -101,6 +101,66 @@ def test_http_target_marks_chat_http_error_as_failure() -> None:
         target.close()
 
 
+def test_http_target_marks_chat_redirect_as_failure() -> None:
+    base_url = "http://localhost:8000"
+
+    scenario = Scenario(
+        name="test_chat_redirect",
+        turns=[Turn(role="user", content="hello")],
+        target_controls=TargetControls(),
+    )
+
+    with respx.mock:
+        respx.post(f"{base_url}/v1/chat/completions").mock(
+            return_value=Response(302, json={"location": "/login"})
+        )
+
+        target = HttpAegisTarget(base_url)
+        result = target.run_scenario(scenario)
+
+        assert result.passed is False
+        assert result.turn_results[0].response_status == 302
+        assert result.failures == [
+            "Turn 1 returned HTTP 302 from http://localhost:8000/v1/chat/completions: "
+            "{'location': '/login'}"
+        ]
+        target.close()
+
+
+def test_http_target_marks_reset_redirect_as_failure() -> None:
+    base_url = "http://localhost:8000"
+
+    scenario = Scenario(
+        name="test_reset_redirect",
+        turns=[Turn(role="user", content="hello")],
+        target_controls=TargetControls(reset_before_run=True),
+    )
+
+    with respx.mock:
+        respx.post(f"{base_url}/test/reset").mock(
+            return_value=Response(302, json={"location": "/login"})
+        )
+        respx.post(f"{base_url}/v1/chat/completions").mock(
+            return_value=Response(
+                200,
+                json={
+                    "choices": [{"message": {"content": "mocked response"}}],
+                    "aegis": {"detector_results": [], "policy_decision": {"final_action": "allow"}},
+                },
+            )
+        )
+
+        target = HttpAegisTarget(base_url)
+        result = target.run_scenario(scenario)
+
+        assert result.passed is False
+        assert result.failures == [
+            "Reset returned HTTP 302 from http://localhost:8000/test/reset: "
+            "{'location': '/login'}"
+        ]
+        target.close()
+
+
 def test_http_target_marks_reset_http_error_as_failure() -> None:
     base_url = "http://localhost:8000"
 
