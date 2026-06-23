@@ -156,6 +156,32 @@ class HttpAegisTarget:
             metadata["mock_response_mode"] = controls.mock_response_mode
         return metadata
 
+    def _seed_canary(self, scenario: Scenario, session_id: str) -> list[str]:
+        seed_canary = scenario.target_controls.seed_canary
+        if seed_canary is None:
+            return []
+
+        seed_url = f"{self.base_url}/test/seed-canary"
+        seed_payload = {
+            "session_id": session_id,
+            "slot_name": seed_canary.slot_name,
+            "credential_type": seed_canary.credential_type,
+            "turn_index": seed_canary.turn_index,
+        }
+        try:
+            seed_response = self.client.post(seed_url, json=seed_payload)
+            seed_body = redact_secrets(_response_body(seed_response))
+            if not _is_success_status(seed_response.status_code):
+                return [
+                    _failure(
+                        f"Seed canary returned HTTP {seed_response.status_code} from {seed_url}: "
+                        f"{seed_body}"
+                    )
+                ]
+        except httpx.HTTPError as exc:
+            return [_failure(f"Failed to seed canary at {seed_url}: {exc}")]
+        return []
+
     def run_scenario(self, scenario: Scenario) -> RedteamResult:
         run_id = str(uuid.uuid4())
         started_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -180,6 +206,7 @@ class HttpAegisTarget:
                 failures.append(_failure(f"Failed to reset: {exc}"))
 
         session_id = scenario.target_controls.session_id or scenario.name
+        failures.extend(self._seed_canary(scenario, session_id))
 
         for idx, turn in enumerate(scenario.turns, start=1):
             if turn.role != "user":

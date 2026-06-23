@@ -24,10 +24,17 @@ class Expected(BaseModel):
     policy: PolicyExpectation | None = None
 
 
+class CanarySeed(BaseModel):
+    slot_name: str
+    credential_type: str
+    turn_index: int
+
+
 class TargetControls(BaseModel):
     mock_response_mode: str | None = None
     reset_before_run: bool = False
     session_id: str | None = None
+    seed_canary: CanarySeed | None = None
 
 
 class Scenario(BaseModel):

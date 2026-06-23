@@ -154,6 +154,9 @@ def make_handler(state: FixtureState) -> type[BaseHTTPRequestHandler]:
             if self.path == "/test/reset":
                 send_json(self, 200, {"status": "reset"})
                 return
+            if self.path == "/test/seed-canary":
+                send_json(self, 200, {"status": "seeded"})
+                return
             if self.path == "/v1/chat/completions":
                 send_json(self, 200, build_chat_response(body))
                 return

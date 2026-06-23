@@ -27,6 +27,30 @@ def fixture_server() -> Iterator[tuple[str, FixtureState]]:
         server.server_close()
 
 
+def test_run_one_passes_seeded_honeytoken_scenario_against_http_fixture() -> None:
+    scenario_path = Path("scenarios/leak_first_honeytoken.yaml")
+
+    with fixture_server() as (base_url, state):
+        result = CliRunner().invoke(app, ["run-one", str(scenario_path), "--target", base_url])
+
+    assert result.exit_code == 0
+    assert "leak_first_honeytoken" in result.output
+    assert "Passed: PASS" in result.output
+    assert "text_canary" in result.output
+    assert [request.path for request in state.requests] == [
+        "/test/reset",
+        "/test/seed-canary",
+        "/v1/chat/completions",
+    ]
+    seed_request = state.requests[1].body
+    assert seed_request == {
+        "session_id": "leak-smoke",
+        "slot_name": "api_key",
+        "credential_type": "openai_key",
+        "turn_index": 0,
+    }
+
+
 def test_run_one_passes_base64_exfil_against_http_fixture() -> None:
     scenario_path = Path("scenarios/base64_exfil.yaml")
 

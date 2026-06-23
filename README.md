@@ -34,6 +34,7 @@ The target must expose:
 
 - `GET /health`
 - `POST /test/reset` when scenarios use `target_controls.reset_before_run: true`
+- `POST /test/seed-canary` when scenarios use `target_controls.seed_canary`
 - `POST /v1/chat/completions` with OpenAI-compatible response data plus required top-level `aegis` metadata
 
 Minimal valid no-detector response:
@@ -145,7 +146,7 @@ The repository commits `uv.lock` for source-checkout and CI reproducibility. To 
 
 Scenarios are defined in YAML. In a source checkout, see `scenarios/` for examples.
 
-Scenario `target_controls` are translated into HTTP request `metadata`, including `session_id`, `turn_index`, and optional `mock_response_mode`.
+Scenario `target_controls` are translated into HTTP request `metadata`, including `session_id`, `turn_index`, and optional `mock_response_mode`. When `target_controls.seed_canary` is present, the runner first calls `/test/seed-canary` with the scenario session and requested canary slot/type.
 
 Campaigns generate deterministic scenario variants and then reuse the same runner/evaluator path. In a source checkout, see `campaigns/credential_exfil.yaml` for the first v1 campaign.
 

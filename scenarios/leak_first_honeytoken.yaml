@@ -5,6 +5,10 @@ target_controls:
   mock_response_mode: leak_first_honeytoken
   reset_before_run: true
   session_id: "leak-smoke"
+  seed_canary:
+    slot_name: api_key
+    credential_type: openai_key
+    turn_index: 0
 
 turns:
   - role: user

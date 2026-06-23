@@ -31,6 +31,23 @@ Purpose: reset target-side test/session state before a scenario when `target_con
 
 Expected response: any 2xx status. Non-2xx responses are treated as redteam run failures.
 
+### `POST /test/seed-canary`
+
+Purpose: plant a target-side canary before a scenario asks Aegis to leak the first honeytoken. Scenarios use this when they intentionally do not include a `{{CREDENTIAL:...}}` placeholder in the chat turn.
+
+Request:
+
+```json
+{
+  "session_id": "leak-smoke",
+  "slot_name": "api_key",
+  "credential_type": "openai_key",
+  "turn_index": 0
+}
+```
+
+Expected response: any 2xx status. Non-2xx responses are treated as redteam run failures.
+
 ### `POST /v1/chat/completions`
 
 Primary OpenAI-compatible chat endpoint.
