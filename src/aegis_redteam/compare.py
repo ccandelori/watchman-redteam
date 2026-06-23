@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from typing import List, Tuple
 from rich.console import Console
 from rich.table import Table
 
@@ -8,12 +7,9 @@ from aegis_redteam.models import RedteamResult
 
 
 def compare_results(
-    current: List[RedteamResult], baseline: List[RedteamResult]
-) -> Tuple[int, int, int]:
-    """
-    Compare current results against a baseline.
-    Returns (regressions, improvements, new).
-    """
+    current: list[RedteamResult], baseline: list[RedteamResult]
+) -> tuple[int, int, int]:
+    """Compare current results against a baseline."""
     console = Console()
     table = Table(title="Regression Comparison")
     table.add_column("Scenario")
@@ -41,8 +37,8 @@ def compare_results(
         else:
             change = "same"
 
-        current_status = "✅" if result.passed else "❌"
-        base_status = "✅" if base_passed else "❌" if base_passed is not None else "-"
+        current_status = "PASS" if result.passed else "FAIL"
+        base_status = "PASS" if base_passed else "FAIL" if base_passed is not None else "-"
 
         table.add_row(result.scenario_name, current_status, base_status, change)
 

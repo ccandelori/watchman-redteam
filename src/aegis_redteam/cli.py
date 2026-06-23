@@ -1,17 +1,20 @@
+# mypy: disable-error-code=untyped-decorator
+
 from __future__ import annotations
 
+import json
+import sys
 from pathlib import Path
-from typing import Optional
 
 import typer
 from rich.console import Console
 from rich.table import Table
 
-from aegis_redteam.scenarios.loader import load_scenarios, load_scenario
-from aegis_redteam.runner import run_scenarios
-from aegis_redteam.report import generate_markdown_report
 from aegis_redteam.compare import compare_results
 from aegis_redteam.models import RedteamResult
+from aegis_redteam.report import generate_markdown_report
+from aegis_redteam.runner import run_scenarios
+from aegis_redteam.scenarios.loader import load_scenario, load_scenarios
 
 app = typer.Typer(help="Aegis Redteam Runner")
 console = Console()
@@ -21,8 +24,8 @@ console = Console()
 def run(
     scenarios_dir: Path = typer.Argument(..., help="Directory containing scenario YAML files"),
     target_url: str = typer.Option("http://localhost:8000", "--target", "-t"),
-    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Write results to JSONL"),
-):
+    output: Path | None = typer.Option(None, "--output", "-o", help="Write results to JSONL"),
+) -> None:
     """Run all scenarios in a directory against Aegis."""
     scenarios = load_scenarios(scenarios_dir)
     if not scenarios:
@@ -39,13 +42,13 @@ def run(
     table.add_column("Policy")
 
     for result in results:
-        status = "[green]✅[/green]" if result.passed else "[red]❌[/red]"
+        status = "[green]PASS[/green]" if result.passed else "[red]FAIL[/red]"
 
-        detectors_fired = []
+        detectors_fired: list[str] = []
         policy_action = "-"
         for turn in result.turn_results:
-            for d in turn.detector_results:
-                detectors_fired.append(d.name)
+            for detector in turn.detector_results:
+                detectors_fired.append(detector.name)
             if turn.policy_decision:
                 policy_action = turn.policy_decision.final_action
 
@@ -74,14 +77,14 @@ def run(
 def run_one(
     scenario_path: Path,
     target_url: str = typer.Option("http://localhost:8000", "--target", "-t"),
-):
+) -> None:
     """Run a single scenario with detailed output."""
     scenario = load_scenario(scenario_path)
     results = run_scenarios([scenario], target_url)
     result = results[0]
 
     console.print(f"[bold cyan]{result.scenario_name}[/bold cyan]")
-    console.print(f"Passed: {'✅' if result.passed else '❌'}")
+    console.print(f"Passed: {'PASS' if result.passed else 'FAIL'}")
     console.print(f"Turns: {len(result.turn_results)}")
 
     for tr in result.turn_results:
@@ -91,7 +94,7 @@ def run_one(
 
 
 @app.command()
-def view(results_file: Path):
+def view(results_file: Path) -> None:
     """View previously saved JSONL results."""
     if not results_file.exists():
         console.print(f"[red]File not found: {results_file}[/red]")
@@ -102,11 +105,10 @@ def view(results_file: Path):
     table.add_column("Passed")
     table.add_column("Policy")
 
-    import json
     with results_file.open() as f:
         for line in f:
             data = json.loads(line)
-            status = "✅" if data.get("passed") else "❌"
+            status = "PASS" if data.get("passed") else "FAIL"
             policy = "-"
             if data.get("turn_results"):
                 last = data["turn_results"][-1]
@@ -119,11 +121,11 @@ def view(results_file: Path):
 
 
 @app.command()
-def report(results_file: Path, output: Path = typer.Argument(..., help="Output Markdown file")):
+def report(
+    results_file: Path, output: Path = typer.Argument(..., help="Output Markdown file")
+) -> None:
     """Generate a Markdown report from a JSONL results file."""
-    import json
-
-    results = []
+    results: list[RedteamResult] = []
     with results_file.open() as f:
         for line in f:
             data = json.loads(line)
@@ -137,24 +139,21 @@ def report(results_file: Path, output: Path = typer.Argument(..., help="Output M
 def compare(
     current_file: Path,
     baseline_file: Path,
-):
+) -> None:
     """Compare current results against a baseline. Exits with code 1 on regressions."""
-    import json
-    import sys
-
-    current = []
+    current: list[RedteamResult] = []
     with current_file.open() as f:
         for line in f:
             data = json.loads(line)
             current.append(RedteamResult.model_validate(data))
 
-    baseline = []
+    baseline: list[RedteamResult] = []
     with baseline_file.open() as f:
         for line in f:
             data = json.loads(line)
             baseline.append(RedteamResult.model_validate(data))
 
-    regressions, improvements, new = compare_results(current, baseline)
+    regressions, _improvements, _new = compare_results(current, baseline)
 
     if regressions > 0:
         console.print(f"\n[red]Exiting with code 1 due to {regressions} regression(s).[/red]")

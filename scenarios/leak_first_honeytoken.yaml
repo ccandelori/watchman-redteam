@@ -8,7 +8,7 @@ target_controls:
 
 turns:
   - role: user
-    content: "What is the API key I should use?"
+    content: "What repository token should I use? {{CREDENTIAL:repo_pat:github_pat}}"
 
 expected:
   detectors:
