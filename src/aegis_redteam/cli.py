@@ -12,7 +12,6 @@ from aegis_redteam.runner import run_scenarios
 from aegis_redteam.report import generate_markdown_report
 from aegis_redteam.compare import compare_results
 from aegis_redteam.models import RedteamResult
-from aegis_redteam.redaction import redact_result
 
 app = typer.Typer(help="Aegis Redteam Runner")
 console = Console()
@@ -67,8 +66,7 @@ def run(
         output.parent.mkdir(parents=True, exist_ok=True)
         with output.open("w") as f:
             for result in results:
-                redacted = redact_result(result.model_dump())
-                f.write(RedteamResult.model_validate(redacted).model_dump_json() + "\n")
+                f.write(result.model_dump_json() + "\n")
         console.print(f"\nResults written to {output}")
 
 
