@@ -10,7 +10,7 @@ from aegis_redteam.models import Scenario, RedteamResult, TurnResult, DetectorRe
 
 
 class HttpAegisTarget:
-    """Black-box HTTP target for Aegis (uses the public /v1/chat/completions endpoint)."""
+    """Black-box HTTP target for Aegis."""
 
     def __init__(self, base_url: str, timeout: float = 30.0):
         self.base_url = base_url.rstrip("/")
@@ -18,7 +18,6 @@ class HttpAegisTarget:
         self.client = httpx.Client(timeout=timeout)
 
     def _apply_controls(self, scenario: Scenario, turn_index: int) -> Dict[str, Any]:
-        """Translate runner-side target_controls into Aegis metadata."""
         controls = scenario.target_controls
         metadata: Dict[str, Any] = {
             "session_id": controls.session_id or scenario.name,
@@ -36,10 +35,10 @@ class HttpAegisTarget:
         raw_responses = []
         failures = []
 
-        # Handle reset if requested
+        # Handle reset
         if scenario.target_controls.reset_before_run:
             try:
-                self.client.post(f"{self.base_url}/test/reset")
+                self.client.post(f"{self.base_url}/test/reset", json={})
             except Exception as exc:
                 failures.append(f"Failed to reset: {exc}")
 
@@ -47,7 +46,7 @@ class HttpAegisTarget:
 
         for idx, turn in enumerate(scenario.turns, start=1):
             if turn.role != "user":
-                continue  # For v0 we only send user turns
+                continue
 
             metadata = self._apply_controls(scenario, idx)
             metadata["session_id"] = session_id
@@ -75,8 +74,8 @@ class HttpAegisTarget:
                 if "choices" in raw and raw["choices"]:
                     assistant_content = raw["choices"][0]["message"].get("content")
 
-                # Extract detector results
-                for d in aegis_meta.get("detectors", []):
+                # Correct Aegis shape: detector_results + policy_decision
+                for d in aegis_meta.get("detector_results", []):
                     detector_results.append(
                         DetectorResult(
                             name=d.get("name", d.get("detector_name", "unknown")),
@@ -84,11 +83,10 @@ class HttpAegisTarget:
                         )
                     )
 
-                # Policy decision
-                if "policy" in aegis_meta:
-                    pol = aegis_meta["policy"]
+                if "policy_decision" in aegis_meta:
+                    pol = aegis_meta["policy_decision"]
                     policy_decision = PolicyDecision(
-                        final_action=pol.get("final_action", pol.get("action", "unknown")),
+                        final_action=pol.get("final_action", "unknown"),
                         reason=pol.get("reason"),
                     )
 
@@ -109,8 +107,6 @@ class HttpAegisTarget:
                 failures.append(f"Turn {idx} failed: {exc}")
 
         finished_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-
-        # Basic pass/fail logic (can be improved later)
         passed = len(failures) == 0
 
         return RedteamResult(

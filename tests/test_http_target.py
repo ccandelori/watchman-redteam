@@ -21,8 +21,10 @@ def test_http_target_basic_run():
                 json={
                     "choices": [{"message": {"content": "mocked response"}}],
                     "aegis": {
-                        "detectors": [{"name": "encoded_canary", "evidence": {}}],
-                        "policy": {"final_action": "block"},
+                        "detector_results": [
+                            {"name": "encoded_canary", "evidence": {}}
+                        ],
+                        "policy_decision": {"final_action": "block"},
                     },
                 },
             )
