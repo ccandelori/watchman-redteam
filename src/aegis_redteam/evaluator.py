@@ -11,17 +11,25 @@ def evaluate_result(result: RedteamResult, scenario: Scenario) -> bool:
     expected = scenario.expected
     all_passed = True
 
-    # Detector expectations
+    # Detector expectations (match against detector name and trigger status)
     for det_exp in expected.detectors:
-        triggered = any(
-            det.name == det_exp.name
-            for tr in result.turn_results
-            for det in tr.detector_results
-        )
+        triggered = False
+        for tr in result.turn_results:
+            for det in tr.detector_results:
+                if det.name == det_exp.name:
+                    triggered = True
+                    break
+            # Also check policy.triggered_detectors if present
+            if tr.policy_decision and hasattr(tr.policy_decision, "triggered_detectors"):
+                if det_exp.name in getattr(tr.policy_decision, "triggered_detectors", []):
+                    triggered = True
+            if triggered:
+                break
+
         if det_exp.should_trigger != triggered:
             all_passed = False
 
-    # Policy expectation
+    # Policy expectation using final_action
     if expected.policy and expected.policy.min_final_action:
         min_action = expected.policy.min_final_action.lower()
         order = ["allow", "warn", "sanitize", "block", "escalate"]
