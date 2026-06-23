@@ -4,7 +4,7 @@ from aegis_redteam.models import RedteamResult, Scenario
 
 
 def evaluate_result(result: RedteamResult, scenario: Scenario) -> bool:
-    """Evaluate whether a RedteamResult meets the scenario's expectations."""
+    """Return True if the result satisfies all expectations in the scenario."""
     if not scenario.expected:
         return True
 
@@ -13,15 +13,11 @@ def evaluate_result(result: RedteamResult, scenario: Scenario) -> bool:
 
     # Detector expectations
     for det_exp in expected.detectors:
-        triggered = False
-        for turn in result.turn_results:
-            for det in turn.detector_results:
-                if det.name == det_exp.name:
-                    triggered = True
-                    break
-            if triggered:
-                break
-
+        triggered = any(
+            det.name == det_exp.name
+            for tr in result.turn_results
+            for det in tr.detector_results
+        )
         if det_exp.should_trigger != triggered:
             all_passed = False
 
@@ -30,9 +26,9 @@ def evaluate_result(result: RedteamResult, scenario: Scenario) -> bool:
         min_action = expected.policy.min_final_action.lower()
         order = ["allow", "warn", "sanitize", "block", "escalate"]
 
-        for turn in result.turn_results:
-            if turn.policy_decision:
-                action = turn.policy_decision.final_action.lower()
+        for tr in result.turn_results:
+            if tr.policy_decision:
+                action = tr.policy_decision.final_action.lower()
                 try:
                     if order.index(action) < order.index(min_action):
                         all_passed = False
