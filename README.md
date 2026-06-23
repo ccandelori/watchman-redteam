@@ -53,6 +53,16 @@ Minimal valid no-detector response:
 
 Detector entries must include `detector_name` or `name`. `HttpAegisTarget` treats every non-2xx reset/chat response as a target failure.
 
+## Target Doctor
+
+Probe a target before running scenarios or campaigns:
+
+```bash
+uv run --locked --extra dev aegis-redteam doctor --target http://localhost:8000
+```
+
+The doctor command checks `/health`, `/test/reset`, `/v1/chat/completions`, and required Aegis metadata. It exits nonzero when required checks fail.
+
 ## Local Fixture Smoke
 
 When no Watchman/Aegis HTTP server is running, start the deterministic redteam-owned fixture target in one terminal:
@@ -131,11 +141,19 @@ uv run --locked --extra dev mypy src tests
 
 The repository commits `uv.lock` for source-checkout and CI reproducibility. To intentionally refresh dependencies, run `uv lock --upgrade`, then rerun the locked development gates before committing the lockfile update.
 
-## Scenarios
+## Scenarios and Campaigns
 
 Scenarios are defined in YAML. In a source checkout, see `scenarios/` for examples.
 
 Scenario `target_controls` are translated into HTTP request `metadata`, including `session_id`, `turn_index`, and optional `mock_response_mode`.
+
+Campaigns generate deterministic scenario variants and then reuse the same runner/evaluator path. In a source checkout, see `campaigns/credential_exfil.yaml` for the first v1 campaign.
+
+```bash
+uv run --locked --extra dev aegis-redteam campaign run campaigns/credential_exfil.yaml --target http://127.0.0.1:8799 --output results/campaign-v1.jsonl --generated-dir generated/campaign-v1
+```
+
+Generated scenario YAML is explicit and replayable with the normal `run` command.
 
 ## Architecture
 
@@ -145,6 +163,8 @@ Scenario `target_controls` are translated into HTTP request `metadata`, includin
 - JSONL result output with credential-like string redaction
 - Baseline comparison that exits nonzero on regressions
 - Deterministic fixture HTTP target for redteam-side smoke tests
+- Target doctor for public-contract readiness checks
+- Deterministic campaign generation that emits replayable scenario YAML
 - Rich table viewer for saved JSONL results
 - Textual TUI components available for future interactive result browsing
 

@@ -13,8 +13,12 @@ from aegis_redteam.report import generate_markdown_report
 from aegis_redteam.compare import compare_results
 from aegis_redteam.models import RedteamResult
 from aegis_redteam.redact import redact_secrets
+from aegis_redteam.doctor import DoctorReport, run_doctor
+from aegis_redteam.campaigns.runner import CampaignRun, run_campaign
 
 app = typer.Typer(help="Aegis Redteam Runner")
+campaign_app = typer.Typer(help="Campaign commands")
+app.add_typer(campaign_app, name="campaign")
 console = Console()
 
 
@@ -36,6 +40,66 @@ def print_failure_details(results: Sequence[RedteamResult]) -> None:
     for result in failed_results:
         for failure in result.failures:
             console.print(f"- {result.scenario_name}: {failure}")
+
+
+def print_doctor_report(report: DoctorReport) -> None:
+    table = Table(title=f"Target Doctor: {report.target_url} ({report.target_kind})")
+    table.add_column("Check", style="cyan")
+    table.add_column("Required", justify="center")
+    table.add_column("Status", justify="center")
+    table.add_column("Detail")
+
+    for check in report.checks:
+        status = "[green]PASS[/green]" if check.passed else "[red]FAIL[/red]"
+        table.add_row(check.name, "yes" if check.required else "no", status, check.detail)
+
+    console.print(table)
+
+
+@app.command()
+def doctor(
+    target_url: str = typer.Option("http://localhost:8000", "--target", "-t"),
+    timeout: float = typer.Option(5.0, "--timeout", help="HTTP timeout in seconds"),
+) -> None:
+    """Probe target readiness for the Aegis HTTP contract."""
+    report = run_doctor(target_url, timeout)
+    print_doctor_report(report)
+    if not report.passed:
+        raise typer.Exit(1)
+
+
+def print_campaign_run_summary(run: CampaignRun) -> None:
+    passed_count = sum(1 for result in run.results if result.passed)
+    console.print(
+        f"\n[bold]{run.campaign.name}[/bold]: "
+        f"[bold]{passed_count}/{len(run.results)}[/bold] campaign scenarios passed"
+    )
+    if len(run.generated_paths) > 0:
+        console.print(f"Generated scenarios: {len(run.generated_paths)}")
+
+
+@campaign_app.command("run")
+def campaign_run(
+    campaign_path: Path = typer.Argument(..., help="Campaign YAML file"),
+    target_url: str = typer.Option("http://localhost:8000", "--target", "-t"),
+    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Write results to JSONL"),
+    generated_dir: Optional[Path] = typer.Option(
+        None,
+        "--generated-dir",
+        help="Write generated scenario YAML files to this directory",
+    ),
+) -> None:
+    """Generate and run deterministic campaign scenarios."""
+    campaign_run_result = run_campaign(campaign_path, target_url, generated_dir)
+    print_campaign_run_summary(campaign_run_result)
+
+    if output is not None:
+        write_results_jsonl(campaign_run_result.results, output)
+        console.print(f"Results written to {output}")
+
+    print_failure_details(campaign_run_result.results)
+    if any(not result.passed for result in campaign_run_result.results):
+        raise typer.Exit(1)
 
 
 @app.command()

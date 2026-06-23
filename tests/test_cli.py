@@ -6,6 +6,9 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
+from aegis_redteam.doctor import DoctorCheck, DoctorReport
+from aegis_redteam.campaigns.models import Campaign
+from aegis_redteam.campaigns.runner import CampaignRun
 from aegis_redteam.models import RedteamResult, Scenario, Turn, TurnResult
 
 
@@ -111,6 +114,158 @@ def test_run_exits_nonzero_when_any_scenario_fails(
     monkeypatch.setattr(cli, "run_scenarios", fake_run_scenarios)
 
     result = CliRunner().invoke(cli.app, ["run", str(scenarios_dir)])
+
+    assert result.exit_code == 1
+    assert "0/1" in result.output
+    assert "expected detector did not fire" in result.output
+
+
+
+def test_doctor_command_exits_zero_when_required_checks_pass(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from aegis_redteam import cli
+
+    def fake_run_doctor(target_url: str, timeout: float) -> DoctorReport:
+        return DoctorReport(
+            target_url=target_url,
+            target_kind="fixture",
+            passed=True,
+            checks=[DoctorCheck(name="health", required=True, passed=True, detail="ok")],
+        )
+
+    monkeypatch.setattr(cli, "run_doctor", fake_run_doctor)
+
+    result = CliRunner().invoke(cli.app, ["doctor", "--target", "http://fixture"])
+
+    assert result.exit_code == 0
+    assert "fixture" in result.output
+    assert "health" in result.output
+    assert "PASS" in result.output
+
+
+def test_doctor_command_exits_nonzero_when_required_checks_fail(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from aegis_redteam import cli
+
+    def fake_run_doctor(target_url: str, timeout: float) -> DoctorReport:
+        return DoctorReport(
+            target_url=target_url,
+            target_kind="live_or_unknown",
+            passed=False,
+            checks=[DoctorCheck(name="health", required=True, passed=False, detail="HTTP 500")],
+        )
+
+    monkeypatch.setattr(cli, "run_doctor", fake_run_doctor)
+
+    result = CliRunner().invoke(cli.app, ["doctor", "--target", "http://target"])
+
+    assert result.exit_code == 1
+    assert "live_or_unknown" in result.output
+    assert "health" in result.output
+    assert "FAIL" in result.output
+    assert "HTTP 500" in result.output
+
+
+
+def test_campaign_run_command_writes_output_and_reports_success(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from aegis_redteam import cli
+
+    campaign_path = tmp_path / "campaign.yaml"
+    output_path = tmp_path / "campaign.jsonl"
+    generated_dir = tmp_path / "generated"
+    campaign_path.write_text("name: credential_exfil_v1\n", encoding="utf-8")
+    campaign = Campaign.model_construct(
+        name="credential_exfil_v1",
+        credential="{{CREDENTIAL:api_key:sk_live_1234}}",
+        reset_before_run=True,
+        variants=[],
+    )
+    result_record = RedteamResult(
+        run_id="run-1",
+        scenario_name="credential_exfil_v1__direct_base64",
+        target_url="http://fixture",
+        started_at="2026-06-23T00:00:00Z",
+        finished_at="2026-06-23T00:00:01Z",
+        passed=True,
+    )
+
+    def fake_run_campaign(
+        campaign_path_arg: Path,
+        target_url: str,
+        generated_dir_arg: Path | None,
+    ) -> CampaignRun:
+        assert campaign_path_arg == campaign_path
+        assert target_url == "http://fixture"
+        assert generated_dir_arg == generated_dir
+        return CampaignRun(
+            campaign=campaign,
+            generated_paths=[generated_dir / "credential_exfil_v1__direct_base64.yaml"],
+            results=[result_record],
+        )
+
+    monkeypatch.setattr(cli, "run_campaign", fake_run_campaign)
+
+    result = CliRunner().invoke(
+        cli.app,
+        [
+            "campaign",
+            "run",
+            str(campaign_path),
+            "--target",
+            "http://fixture",
+            "--output",
+            str(output_path),
+            "--generated-dir",
+            str(generated_dir),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "credential_exfil_v1" in result.output
+    assert "1/1" in result.output
+    assert "Generated scenarios" in result.output
+    assert output_path.exists()
+
+
+def test_campaign_run_command_exits_nonzero_when_any_result_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from aegis_redteam import cli
+
+    campaign_path = tmp_path / "campaign.yaml"
+    campaign_path.write_text("name: credential_exfil_v1\n", encoding="utf-8")
+    campaign = Campaign.model_construct(
+        name="credential_exfil_v1",
+        credential="{{CREDENTIAL:api_key:sk_live_1234}}",
+        reset_before_run=True,
+        variants=[],
+    )
+    result_record = RedteamResult(
+        run_id="run-1",
+        scenario_name="credential_exfil_v1__direct_base64",
+        target_url="http://fixture",
+        started_at="2026-06-23T00:00:00Z",
+        finished_at="2026-06-23T00:00:01Z",
+        passed=False,
+        failures=["expected detector did not fire"],
+    )
+
+    def fake_run_campaign(
+        campaign_path_arg: Path,
+        target_url: str,
+        generated_dir_arg: Path | None,
+    ) -> CampaignRun:
+        return CampaignRun(campaign=campaign, generated_paths=[], results=[result_record])
+
+    monkeypatch.setattr(cli, "run_campaign", fake_run_campaign)
+
+    result = CliRunner().invoke(cli.app, ["campaign", "run", str(campaign_path)])
 
     assert result.exit_code == 1
     assert "0/1" in result.output
