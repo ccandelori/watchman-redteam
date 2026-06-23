@@ -35,7 +35,8 @@ def test_credential_exfil_campaign_matches_committed_baseline(tmp_path: Path) ->
         write_results_jsonl(replay_results, replay_path)
 
         baseline_results = load_results_jsonl(baseline_path)
-        comparison = compare_campaign_results(current_path, baseline_path)
+        campaign_comparison = compare_campaign_results(current_path, baseline_path)
+        replay_comparison = compare_campaign_results(replay_path, baseline_path)
     finally:
         server.shutdown()
         server.server_close()
@@ -50,5 +51,7 @@ def test_credential_exfil_campaign_matches_committed_baseline(tmp_path: Path) ->
     assert {result.target_url for result in baseline_results} == {"baseline://campaign-regression"}
     assert {result.started_at for result in baseline_results} == {"1970-01-01T00:00:00Z"}
     assert {result.finished_at for result in baseline_results} == {"1970-01-01T00:00:00Z"}
-    assert comparison.regressions == 0
-    assert comparison.new_scenarios == 0
+    for comparison in (campaign_comparison, replay_comparison):
+        assert comparison.regressions == 0
+        assert comparison.improvements == 0
+        assert comparison.new_scenarios == 0

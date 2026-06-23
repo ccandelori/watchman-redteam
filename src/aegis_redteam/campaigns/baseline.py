@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from aegis_redteam.models import RedteamResult
+from aegis_redteam.models import DetectorResult, PolicyDecision, RedteamResult, TurnResult
 from aegis_redteam.results import load_results_jsonl, write_results_jsonl
 
 BASELINE_TARGET_URL = "baseline://campaign-regression"
@@ -25,8 +25,42 @@ def canonicalize_campaign_baseline_result(result: RedteamResult) -> RedteamResul
             "target_url": BASELINE_TARGET_URL,
             "started_at": BASELINE_TIMESTAMP,
             "finished_at": BASELINE_TIMESTAMP,
+            "turn_results": [_canonicalize_turn_result(turn_result) for turn_result in result.turn_results],
+            "failures": _canonicalize_failures(result.failures, result.target_url),
+            "raw_responses": [],
         }
     )
+
+
+def _canonicalize_turn_result(turn_result: TurnResult) -> TurnResult:
+    policy_decision = turn_result.policy_decision
+    canonical_policy_decision = (
+        None if policy_decision is None else _canonicalize_policy_decision(policy_decision)
+    )
+    return turn_result.model_copy(
+        update={
+            "assistant_content": None,
+            "aegis_metadata": {},
+            "detector_results": [
+                DetectorResult(name=detector_result.name, evidence={})
+                for detector_result in turn_result.detector_results
+            ],
+            "policy_decision": canonical_policy_decision,
+            "latency_ms": None,
+        }
+    )
+
+
+def _canonicalize_policy_decision(policy_decision: PolicyDecision) -> PolicyDecision:
+    return PolicyDecision(
+        final_action=policy_decision.final_action,
+        reason=None,
+        triggered_detectors=list(policy_decision.triggered_detectors),
+    )
+
+
+def _canonicalize_failures(failures: list[str], source_target_url: str) -> list[str]:
+    return [failure.replace(source_target_url, BASELINE_TARGET_URL) for failure in failures]
 
 
 def promote_campaign_baseline(
