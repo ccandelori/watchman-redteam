@@ -76,6 +76,9 @@ def run(
         write_results_jsonl(results, output)
         console.print(f"\nResults written to {output}")
 
+    if any(not result.passed for result in results):
+        raise typer.Exit(1)
+
 
 @app.command()
 def run_one(
@@ -95,6 +98,9 @@ def run_one(
         console.print(f"\n[bold]Turn {tr.turn_index}[/bold]")
         console.print(f"  Policy: {tr.policy_decision.final_action if tr.policy_decision else '-'}")
         console.print(f"  Detectors: {[d.name for d in tr.detector_results]}")
+
+    if not result.passed:
+        raise typer.Exit(1)
 
 
 @app.command()
