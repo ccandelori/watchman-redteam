@@ -11,7 +11,6 @@ from aegis_redteam.models import RedteamResult
 class RedteamTUI(App[None]):
     """TUI for viewing redteam results."""
 
-    CSS_PATH = "app.css"
     BINDINGS = [("q", "quit", "Quit")]
 
     def __init__(self, results: list[RedteamResult] | None = None) -> None:
