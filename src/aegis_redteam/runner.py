@@ -10,7 +10,7 @@ from aegis_redteam.evaluator import evaluate_result
 def run_scenarios(
     scenarios: List[Scenario], base_url: str
 ) -> List[RedteamResult]:
-    """Run a list of scenarios against an HTTP Aegis target and evaluate expectations."""
+    """Run scenarios against Aegis and evaluate expectations."""
     target = HttpAegisTarget(base_url)
     results: List[RedteamResult] = []
 
