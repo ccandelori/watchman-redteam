@@ -27,6 +27,17 @@ def write_results_jsonl(results: Sequence[RedteamResult], output_path: Path) -> 
             output_file.write(RedteamResult.model_validate(redacted_result).model_dump_json() + "\n")
 
 
+def print_failure_details(results: Sequence[RedteamResult]) -> None:
+    failed_results = [result for result in results if len(result.failures) > 0]
+    if len(failed_results) == 0:
+        return
+
+    console.print("\n[bold red]Failures[/bold red]")
+    for result in failed_results:
+        for failure in result.failures:
+            console.print(f"- {result.scenario_name}: {failure}")
+
+
 @app.command()
 def run(
     scenarios_dir: Path = typer.Argument(..., help="Directory containing scenario YAML files"),
@@ -76,6 +87,8 @@ def run(
         write_results_jsonl(results, output)
         console.print(f"\nResults written to {output}")
 
+    print_failure_details(results)
+
     if any(not result.passed for result in results):
         raise typer.Exit(1)
 
@@ -98,6 +111,8 @@ def run_one(
         console.print(f"\n[bold]Turn {tr.turn_index}[/bold]")
         console.print(f"  Policy: {tr.policy_decision.final_action if tr.policy_decision else '-'}")
         console.print(f"  Detectors: {[d.name for d in tr.detector_results]}")
+
+    print_failure_details([result])
 
     if not result.passed:
         raise typer.Exit(1)

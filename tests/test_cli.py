@@ -92,6 +92,7 @@ def test_run_one_exits_nonzero_when_scenario_fails(
 
     assert result.exit_code == 1
     assert "Passed: FAIL" in result.output
+    assert "expected detector did not fire" in result.output
 
 
 def test_run_exits_nonzero_when_any_scenario_fails(
@@ -113,3 +114,4 @@ def test_run_exits_nonzero_when_any_scenario_fails(
 
     assert result.exit_code == 1
     assert "0/1" in result.output
+    assert "expected detector did not fire" in result.output
