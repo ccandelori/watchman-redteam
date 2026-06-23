@@ -176,6 +176,18 @@ def compare(
         sys.exit(0)
 
 
+@app.command()
+def serve_fixture(
+    host: str = typer.Option("127.0.0.1", "--host", help="Host interface to bind"),
+    port: int = typer.Option(8000, "--port", help="TCP port to bind"),
+) -> None:
+    """Start a local deterministic Aegis-compatible fixture server."""
+    from aegis_redteam.fixture_server import serve_fixture_server
+
+    console.print(f"Serving Aegis fixture target at http://{host}:{port}")
+    serve_fixture_server(host, port)
+
+
 def main() -> None:
     """Console script entry point."""
     app()
