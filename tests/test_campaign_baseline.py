@@ -20,6 +20,31 @@ def make_result(scenario_name: str, passed: bool) -> RedteamResult:
     )
 
 
+def test_promote_campaign_baseline_canonicalizes_volatile_run_fields(tmp_path: Path) -> None:
+    source_path = tmp_path / "results" / "campaign.jsonl"
+    baseline_path = tmp_path / "baselines" / "credential_exfil.jsonl"
+    source_result = RedteamResult(
+        run_id="runtime-uuid",
+        scenario_name="credential_exfil_v1__direct_base64",
+        target_url="http://127.0.0.1:9812",
+        started_at="2026-06-23T22:38:28Z",
+        finished_at="2026-06-23T22:38:29Z",
+        passed=True,
+        failures=[],
+    )
+    write_results_jsonl([source_result], source_path)
+
+    promote_campaign_baseline(source_path, baseline_path, force=False)
+
+    promoted = load_results_jsonl(baseline_path)[0]
+    assert promoted.run_id == "baseline:credential_exfil_v1__direct_base64"
+    assert promoted.target_url == "baseline://campaign-regression"
+    assert promoted.started_at == "1970-01-01T00:00:00Z"
+    assert promoted.finished_at == "1970-01-01T00:00:00Z"
+    assert promoted.scenario_name == "credential_exfil_v1__direct_base64"
+    assert promoted.passed is True
+
+
 def test_promote_campaign_baseline_writes_validated_results(tmp_path: Path) -> None:
     source_path = tmp_path / "results" / "campaign.jsonl"
     baseline_path = tmp_path / "baselines" / "credential_exfil.jsonl"

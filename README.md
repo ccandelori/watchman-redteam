@@ -160,7 +160,15 @@ uv run --locked --extra dev aegis-redteam campaign baseline promote results/camp
 uv run --locked --extra dev aegis-redteam campaign compare results/campaign-v1.jsonl baselines/credential-exfil-v1.jsonl
 ```
 
-Baseline promotion validates the source JSONL, creates parent directories, and refuses to overwrite an existing baseline unless `--force` is passed. The campaign compare command exits nonzero when regressions are detected.
+Baseline promotion validates the source JSONL, creates parent directories, canonicalizes volatile run metadata for committed baselines, and refuses to overwrite an existing baseline unless `--force` is passed. The campaign compare command exits nonzero when regressions are detected.
+
+The committed credential-exfil campaign baseline lives at `baselines/credential-exfil-v1.jsonl`. CI enforces it with:
+
+```bash
+uv run --locked --extra dev pytest tests/test_campaign_regression_gate.py -q
+```
+
+That gate starts the deterministic fixture target, runs the campaign, replays generated YAML through the normal scenario runner, and compares the current campaign JSONL against the committed baseline.
 
 ## Architecture
 
