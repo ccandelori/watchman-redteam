@@ -82,9 +82,9 @@ def print_campaign_run_summary(run: CampaignRun) -> None:
 def campaign_run(
     campaign_path: Path = typer.Argument(..., help="Campaign YAML file"),
     target_url: str = typer.Option("http://localhost:8000", "--target", "-t"),
-    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Write results to JSONL"),
-    generated_dir: Optional[Path] = typer.Option(
-        None,
+    output: Path = typer.Option(..., "--output", "-o", help="Write results to JSONL"),
+    generated_dir: Path = typer.Option(
+        ...,
         "--generated-dir",
         help="Write generated scenario YAML files to this directory",
     ),

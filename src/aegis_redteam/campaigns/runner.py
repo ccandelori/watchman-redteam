@@ -17,9 +17,9 @@ class CampaignRun:
     results: list[RedteamResult]
 
 
-def run_campaign(campaign_path: Path, target_url: str, generated_dir: Path | None) -> CampaignRun:
+def run_campaign(campaign_path: Path, target_url: str, generated_dir: Path) -> CampaignRun:
     campaign = load_campaign(campaign_path)
     scenarios = generate_campaign_scenarios(campaign)
-    generated_paths = [] if generated_dir is None else write_generated_scenarios(scenarios, generated_dir)
+    generated_paths = write_generated_scenarios(scenarios, generated_dir)
     results = run_scenarios(scenarios, target_url)
     return CampaignRun(campaign=campaign, generated_paths=generated_paths, results=results)

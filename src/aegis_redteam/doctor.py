@@ -6,8 +6,15 @@ import httpx
 from pydantic import BaseModel
 
 from aegis_redteam.redact import redact_secrets, redact_text
+from aegis_redteam.targets.http import (
+    _aegis_metadata,
+    _assistant_content,
+    _detector_results,
+    _policy_decision,
+)
 
 JsonObject = dict[str, Any]
+_LIVE_CAPABILITIES = {"cift", "dp_honey", "nimbus"}
 
 
 class DoctorCheck(BaseModel):
@@ -54,39 +61,31 @@ def _failed_check(name: str, detail: str) -> DoctorCheck:
 
 def _target_kind_from_health(body: JsonObject) -> str:
     capabilities = body.get("capabilities")
-    if isinstance(capabilities, list) and "fixture" in capabilities:
+    if not isinstance(capabilities, list):
+        return "unknown-compatible"
+    string_capabilities = {capability for capability in capabilities if isinstance(capability, str)}
+    if "fixture" in string_capabilities:
         return "fixture"
-    return "live_or_unknown"
+    if len(string_capabilities & _LIVE_CAPABILITIES) > 0:
+        return "live-compatible"
+    return "unknown-compatible"
+
+
+def _chat_response_failure(response_body: JsonObject) -> str | None:
+    try:
+        _assistant_content(response_body)
+    except ValueError as exc:
+        return str(exc)
+    return None
 
 
 def _metadata_failure(response_body: JsonObject) -> str | None:
-    if "aegis" not in response_body:
-        return "expected 'aegis' to be present"
-    metadata = response_body["aegis"]
-    if not isinstance(metadata, dict):
-        return "expected 'aegis' to be an object"
-    if "detector_results" not in metadata:
-        return "expected 'aegis.detector_results' to be present"
-    detector_payloads = metadata["detector_results"]
-    if not isinstance(detector_payloads, list):
-        return "expected 'aegis.detector_results' to be a list"
-    for index, detector_payload in enumerate(detector_payloads):
-        if not isinstance(detector_payload, dict):
-            return f"expected 'aegis.detector_results[{index}]' to be an object"
-        detector_name = detector_payload.get("detector_name", detector_payload.get("name"))
-        if detector_name is None:
-            return f"expected 'aegis.detector_results[{index}].detector_name' to be present"
-        if not isinstance(detector_name, str):
-            return f"expected 'aegis.detector_results[{index}].detector_name' to be a string"
-    if "policy_decision" not in metadata:
-        return "expected 'aegis.policy_decision' to be present"
-    policy_payload = metadata["policy_decision"]
-    if not isinstance(policy_payload, dict):
-        return "expected 'aegis.policy_decision' to be an object"
-    if "final_action" not in policy_payload:
-        return "expected 'aegis.policy_decision.final_action' to be present"
-    if not isinstance(policy_payload["final_action"], str):
-        return "expected 'aegis.policy_decision.final_action' to be a string"
+    try:
+        metadata = _aegis_metadata(response_body)
+        _detector_results(metadata)
+        _policy_decision(metadata)
+    except ValueError as exc:
+        return str(exc)
     return None
 
 
@@ -132,7 +131,6 @@ def _chat_payload() -> JsonObject:
         "metadata": {
             "session_id": "doctor-probe",
             "turn_index": 1,
-            "mock_response_mode": "default",
         },
     }
 
@@ -156,6 +154,10 @@ def _chat_checks(client: httpx.Client, base_url: str) -> list[DoctorCheck]:
             ),
             _failed_check("aegis_metadata", "chat check failed before metadata validation"),
         ]
+
+    chat_response_failure = _chat_response_failure(body)
+    if chat_response_failure is not None:
+        return [_passed_check("chat"), _failed_check("chat_response", chat_response_failure)]
 
     metadata_failure = _metadata_failure(body)
     if metadata_failure is not None:

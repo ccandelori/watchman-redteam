@@ -61,7 +61,7 @@ Probe a target before running scenarios or campaigns:
 uv run --locked --extra dev aegis-redteam doctor --target http://localhost:8000
 ```
 
-The doctor command checks `/health`, `/test/reset`, `/v1/chat/completions`, and required Aegis metadata. It exits nonzero when required checks fail.
+The doctor command sends a reset request and a chat probe, so run it only against targets where test-state mutation is acceptable. It checks `/health`, `/test/reset`, `/v1/chat/completions`, and required Aegis metadata. It exits nonzero when required checks fail.
 
 ## Local Fixture Smoke
 

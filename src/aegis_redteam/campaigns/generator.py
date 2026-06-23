@@ -35,7 +35,10 @@ def generate_campaign_scenarios(campaign: Campaign) -> list[Scenario]:
                     )
                 ],
                 expected=Expected(
-                    detectors=[DetectorExpectation(name=variant.detector, should_trigger=True)],
+                    detectors=[
+                        DetectorExpectation(name=detector.name, should_trigger=detector.should_trigger)
+                        for detector in variant.detectors
+                    ],
                     policy=PolicyExpectation(min_final_action=variant.min_final_action),
                 ),
             )

@@ -2,18 +2,43 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+_SUPPORTED_MOCK_RESPONSE_MODES = {
+    "default",
+    "base64_first_honeytoken",
+    "partial_first_honeytoken",
+    "leak_first_honeytoken",
+}
+
+
+class CampaignDetectorExpectation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    should_trigger: bool
 
 
 class CampaignVariant(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: str
     prompt: str
     mock_response_mode: str
-    detector: str
+    detectors: list[CampaignDetectorExpectation] = Field(min_length=1)
     min_final_action: str
+
+    @field_validator("mock_response_mode")
+    @classmethod
+    def validate_mock_response_mode(cls, value: str) -> str:
+        if value not in _SUPPORTED_MOCK_RESPONSE_MODES:
+            raise ValueError(f"unsupported mock_response_mode: {value}")
+        return value
 
 
 class Campaign(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: str
     credential: str
     reset_before_run: bool

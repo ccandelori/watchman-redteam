@@ -152,7 +152,7 @@ def test_doctor_command_exits_nonzero_when_required_checks_fail(
     def fake_run_doctor(target_url: str, timeout: float) -> DoctorReport:
         return DoctorReport(
             target_url=target_url,
-            target_kind="live_or_unknown",
+            target_kind="unknown-compatible",
             passed=False,
             checks=[DoctorCheck(name="health", required=True, passed=False, detail="HTTP 500")],
         )
@@ -162,7 +162,7 @@ def test_doctor_command_exits_nonzero_when_required_checks_fail(
     result = CliRunner().invoke(cli.app, ["doctor", "--target", "http://target"])
 
     assert result.exit_code == 1
-    assert "live_or_unknown" in result.output
+    assert "unknown-compatible" in result.output
     assert "health" in result.output
     assert "FAIL" in result.output
     assert "HTTP 500" in result.output
@@ -265,8 +265,69 @@ def test_campaign_run_command_exits_nonzero_when_any_result_fails(
 
     monkeypatch.setattr(cli, "run_campaign", fake_run_campaign)
 
-    result = CliRunner().invoke(cli.app, ["campaign", "run", str(campaign_path)])
+    result = CliRunner().invoke(
+        cli.app,
+        [
+            "campaign",
+            "run",
+            str(campaign_path),
+            "--output",
+            str(tmp_path / "campaign.jsonl"),
+            "--generated-dir",
+            str(tmp_path / "generated"),
+        ],
+    )
 
     assert result.exit_code == 1
     assert "0/1" in result.output
     assert "expected detector did not fire" in result.output
+
+
+
+def test_campaign_run_command_requires_output_and_generated_dir(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from aegis_redteam import cli
+
+    campaign_path = tmp_path / "campaign.yaml"
+    campaign_path.write_text("name: credential_exfil_v1\n", encoding="utf-8")
+    invoked = False
+
+    def fake_run_campaign(
+        campaign_path_arg: Path,
+        target_url: str,
+        generated_dir_arg: Path,
+    ) -> CampaignRun:
+        nonlocal invoked
+        invoked = True
+        return CampaignRun(
+            campaign=Campaign.model_construct(
+                name="credential_exfil_v1",
+                credential="{{CREDENTIAL:api_key:sk_live_1234}}",
+                reset_before_run=True,
+                variants=[],
+            ),
+            generated_paths=[],
+            results=[],
+        )
+
+    monkeypatch.setattr(cli, "run_campaign", fake_run_campaign)
+
+    missing_output = CliRunner().invoke(cli.app, ["campaign", "run", str(campaign_path)])
+    missing_generated_dir = CliRunner().invoke(
+        cli.app,
+        [
+            "campaign",
+            "run",
+            str(campaign_path),
+            "--output",
+            str(tmp_path / "campaign.jsonl"),
+        ],
+    )
+
+    assert missing_output.exit_code != 0
+    assert "--output" in missing_output.output
+    assert missing_generated_dir.exit_code != 0
+    assert "--generated-dir" in missing_generated_dir.output
+    assert invoked is False
