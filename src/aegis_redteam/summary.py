@@ -8,7 +8,7 @@ from aegis_redteam.models import RedteamResult
 
 
 def print_summary(results: List[RedteamResult]) -> None:
-    """Print a nice summary table of redteam results."""
+    """Print a clean summary table."""
     console = Console()
     table = Table(title="Redteam Summary")
     table.add_column("Scenario")
