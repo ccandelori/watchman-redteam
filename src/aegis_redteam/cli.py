@@ -10,6 +10,8 @@ from rich.table import Table
 from aegis_redteam.scenarios.loader import load_scenarios, load_scenario
 from aegis_redteam.runner import run_scenarios
 from aegis_redteam.report import generate_markdown_report
+from aegis_redteam.compare import compare_results
+from aegis_redteam.models import RedteamResult
 
 app = typer.Typer(help="Aegis Redteam Runner")
 console = Console()
@@ -119,7 +121,6 @@ def view(results_file: Path):
 @app.command()
 def report(results_file: Path, output: Path = typer.Argument(..., help="Output Markdown file")):
     """Generate a Markdown report from a JSONL results file."""
-    from aegis_redteam.models import RedteamResult
     import json
 
     results = []
@@ -130,6 +131,30 @@ def report(results_file: Path, output: Path = typer.Argument(..., help="Output M
 
     generate_markdown_report(results, output)
     console.print(f"Report written to {output}")
+
+
+@app.command()
+def compare(
+    current_file: Path,
+    baseline_file: Path,
+):
+    """Compare current results against a baseline."""
+    import json
+
+    current = []
+    with current_file.open() as f:
+        for line in f:
+            data = json.loads(line)
+            current.append(RedteamResult.model_validate(data))
+
+    baseline = []
+    with baseline_file.open() as f:
+        for line in f:
+            data = json.loads(line)
+            baseline.append(RedteamResult.model_validate(data))
+
+    from aegis_redteam.compare import compare_results
+    compare_results(current, baseline)
 
 
 if __name__ == "__main__":
