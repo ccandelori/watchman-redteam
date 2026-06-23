@@ -35,7 +35,6 @@ class HttpAegisTarget:
         raw_responses = []
         failures = []
 
-        # Handle reset
         if scenario.target_controls.reset_before_run:
             try:
                 self.client.post(f"{self.base_url}/test/reset", json={})
@@ -74,7 +73,6 @@ class HttpAegisTarget:
                 if "choices" in raw and raw["choices"]:
                     assistant_content = raw["choices"][0]["message"].get("content")
 
-                # Correct Aegis shape: detector_results + policy_decision
                 for d in aegis_meta.get("detector_results", []):
                     detector_results.append(
                         DetectorResult(
