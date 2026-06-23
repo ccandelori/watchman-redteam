@@ -21,7 +21,6 @@ def evaluate_result(result: RedteamResult, scenario: Scenario) -> bool:
                     break
             # Also check policy.triggered_detectors if present
             if tr.policy_decision:
-                # Check if the policy has triggered_detectors list
                 triggered_detectors = getattr(tr.policy_decision, "triggered_detectors", None)
                 if triggered_detectors and det_exp.name in triggered_detectors:
                     triggered = True

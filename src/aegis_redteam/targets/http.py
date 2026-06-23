@@ -7,6 +7,7 @@ from typing import Any, Dict
 import httpx
 
 from aegis_redteam.models import Scenario, RedteamResult, TurnResult, DetectorResult, PolicyDecision
+from aegis_redteam.redact import redact_secrets
 
 
 class HttpAegisTarget:
@@ -63,7 +64,7 @@ class HttpAegisTarget:
                 )
                 latency = int((time.time() - start) * 1000)
                 raw = resp.json() if resp.text else {}
-                raw_responses.append(raw)
+                raw_responses.append(redact_secrets(raw))
 
                 assistant_content = None
                 aegis_meta: Dict[str, Any] = raw.get("aegis", {})
