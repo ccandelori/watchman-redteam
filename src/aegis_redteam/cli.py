@@ -1,15 +1,17 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Optional
 
 import typer
+from rich.console import Console
+from rich.table import Table
 
 from aegis_redteam.scenarios.loader import load_scenarios
 from aegis_redteam.runner import run_scenarios
 
 app = typer.Typer(help="Aegis Redteam Runner")
+console = Console()
 
 
 @app.command()
@@ -20,18 +22,38 @@ def run(
 ):
     """Run all scenarios in a directory against Aegis."""
     scenarios = load_scenarios(scenarios_dir)
+    if not scenarios:
+        console.print("[red]No scenarios found.[/red]")
+        raise typer.Exit(1)
+
     results = run_scenarios(scenarios, target_url)
 
-    for result in results:
-        line = result.model_dump_json()
-        typer.echo(line)
-        if output:
-            output.parent.mkdir(parents=True, exist_ok=True)
-            with output.open("a") as f:
-                f.write(line + "\n")
+    table = Table(title="Redteam Results")
+    table.add_column("Scenario", style="cyan")
+    table.add_column("Passed", style="green")
+    table.add_column("Turns")
+    table.add_column("Failures")
 
-    passed = sum(1 for r in results if r.passed)
-    typer.echo(f"\n{passed}/{len(results)} scenarios passed")
+    for result in results:
+        status = "✅" if result.passed else "❌"
+        table.add_row(
+            result.scenario_name,
+            status,
+            str(len(result.turn_results)),
+            str(len(result.failures)),
+        )
+
+    console.print(table)
+
+    passed_count = sum(1 for r in results if r.passed)
+    console.print(f"\n[bold]{passed_count}/{len(results)}[/bold] scenarios passed")
+
+    if output:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        with output.open("w") as f:
+            for result in results:
+                f.write(result.model_dump_json() + "\n")
+        console.print(f"\nResults written to {output}")
 
 
 if __name__ == "__main__":
