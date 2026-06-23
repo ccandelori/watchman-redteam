@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from aegis_redteam.models import RedteamResult
+from aegis_redteam.redact import redact_text
 
 
 def generate_markdown_report(results: list[RedteamResult], output_path: Path) -> None:
@@ -28,4 +29,4 @@ def generate_markdown_report(results: list[RedteamResult], output_path: Path) ->
 
         lines.append("")
 
-    output_path.write_text("\n".join(lines), encoding="utf-8")
+    output_path.write_text(redact_text("\n".join(lines)), encoding="utf-8")

@@ -7,7 +7,7 @@ from typing import Any, cast
 import httpx
 
 from aegis_redteam.models import DetectorResult, PolicyDecision, RedteamResult, Scenario, TurnResult
-from aegis_redteam.redact import redact_secrets
+from aegis_redteam.redact import redact_secrets, redact_text
 
 
 def _response_body(response: httpx.Response) -> dict[str, Any]:
@@ -24,6 +24,10 @@ def _response_body(response: httpx.Response) -> dict[str, Any]:
 
 def _is_success_status(status_code: int) -> bool:
     return 200 <= status_code < 300
+
+
+def _failure(message: str) -> str:
+    return redact_text(message)
 
 
 def _aegis_metadata(response_body: dict[str, Any]) -> dict[str, Any]:
@@ -167,11 +171,13 @@ class HttpAegisTarget:
                 reset_body = redact_secrets(_response_body(reset_response))
                 if not _is_success_status(reset_response.status_code):
                     failures.append(
-                        f"Reset returned HTTP {reset_response.status_code} from {reset_url}: "
-                        f"{reset_body}"
+                        _failure(
+                            f"Reset returned HTTP {reset_response.status_code} from {reset_url}: "
+                            f"{reset_body}"
+                        )
                     )
             except httpx.HTTPError as exc:
-                failures.append(f"Failed to reset: {exc}")
+                failures.append(_failure(f"Failed to reset: {exc}"))
 
         session_id = scenario.target_controls.session_id or scenario.name
 
@@ -198,8 +204,10 @@ class HttpAegisTarget:
 
                 if not _is_success_status(resp.status_code):
                     failures.append(
-                        f"Turn {idx} returned HTTP {resp.status_code} from {chat_url}: "
-                        f"{redact_secrets(raw)}"
+                        _failure(
+                            f"Turn {idx} returned HTTP {resp.status_code} from {chat_url}: "
+                            f"{redact_secrets(raw)}"
+                        )
                     )
                     turn_results.append(
                         TurnResult(
@@ -226,11 +234,11 @@ class HttpAegisTarget:
                 )
 
             except httpx.ConnectError as exc:
-                failures.append(f"Could not connect to {self.base_url}: {exc}")
+                failures.append(_failure(f"Could not connect to {self.base_url}: {exc}"))
             except httpx.HTTPError as exc:
-                failures.append(f"Turn {idx} HTTP request failed: {exc}")
+                failures.append(_failure(f"Turn {idx} HTTP request failed: {exc}"))
             except ValueError as exc:
-                failures.append(f"Malformed target response on turn {idx}: {exc}")
+                failures.append(_failure(f"Malformed target response on turn {idx}: {exc}"))
 
         finished_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         passed = len(failures) == 0

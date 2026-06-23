@@ -1,3 +1,4 @@
+import httpx
 import respx
 from httpx import Response
 
@@ -440,4 +441,29 @@ def test_http_target_reports_missing_policy_final_action() -> None:
             "Malformed target response on turn 1: "
             "expected 'aegis.policy_decision.final_action' to be present"
         ]
+        target.close()
+
+
+
+def test_http_target_redacts_exception_failure_strings() -> None:
+    base_url = "http://localhost:8000"
+    token = "sk-proj-" + "E" * 20 + "_abcdefABCDEF"
+
+    scenario = Scenario(
+        name="test_exception_redaction",
+        turns=[Turn(role="user", content="hello")],
+        target_controls=TargetControls(),
+    )
+
+    with respx.mock:
+        respx.post(f"{base_url}/v1/chat/completions").mock(
+            side_effect=httpx.ConnectError(f"failed with api_key={token}")
+        )
+
+        target = HttpAegisTarget(base_url)
+        result = target.run_scenario(scenario)
+
+        assert result.passed is False
+        assert token not in str(result.failures)
+        assert "[REDACTED]" in str(result.failures)
         target.close()
