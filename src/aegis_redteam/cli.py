@@ -153,7 +153,6 @@ def compare(
             data = json.loads(line)
             baseline.append(RedteamResult.model_validate(data))
 
-    from aegis_redteam.compare import compare_results
     compare_results(current, baseline)
 
 
