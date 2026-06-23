@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 import uuid
-from typing import Any, Dict
+from typing import Any
 
 import httpx
 
@@ -10,7 +10,7 @@ from aegis_redteam.models import Scenario, RedteamResult, TurnResult, DetectorRe
 from aegis_redteam.redact import redact_secrets
 
 
-def _response_body(response: httpx.Response) -> Dict[str, Any]:
+def _response_body(response: httpx.Response) -> dict[str, Any]:
     if response.text == "":
         return {}
     try:
@@ -30,9 +30,9 @@ class HttpAegisTarget:
         self.timeout = timeout
         self.client = httpx.Client(timeout=timeout)
 
-    def _apply_controls(self, scenario: Scenario, turn_index: int) -> Dict[str, Any]:
+    def _apply_controls(self, scenario: Scenario, turn_index: int) -> dict[str, Any]:
         controls = scenario.target_controls
-        metadata: Dict[str, Any] = {
+        metadata: dict[str, Any] = {
             "session_id": controls.session_id or scenario.name,
             "turn_index": turn_index,
         }
@@ -45,7 +45,7 @@ class HttpAegisTarget:
         started_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
         turn_results: list[TurnResult] = []
-        raw_responses: list[Dict[str, Any]] = []
+        raw_responses: list[dict[str, Any]] = []
         failures: list[str] = []
 
         if scenario.target_controls.reset_before_run:
@@ -100,7 +100,7 @@ class HttpAegisTarget:
                     continue
 
                 assistant_content = None
-                aegis_meta: Dict[str, Any] = raw.get("aegis", {})
+                aegis_meta: dict[str, Any] = raw.get("aegis", {})
                 detector_results: list[DetectorResult] = []
                 policy_decision = None
 

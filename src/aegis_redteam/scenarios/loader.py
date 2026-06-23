@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List
 
 import yaml
 
@@ -15,10 +14,10 @@ def load_scenario(path: Path | str) -> Scenario:
     return Scenario.model_validate(data)
 
 
-def load_scenarios(directory: Path | str) -> List[Scenario]:
+def load_scenarios(directory: Path | str) -> list[Scenario]:
     """Load all .yaml/.yml files from a directory."""
     directory = Path(directory)
-    scenarios: List[Scenario] = []
+    scenarios: list[Scenario] = []
     for file in sorted(directory.glob("*.yaml")) + sorted(directory.glob("*.yml")):
         scenarios.append(load_scenario(file))
     return scenarios

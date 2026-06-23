@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List
 
 from aegis_redteam.models import RedteamResult
 
 
-def generate_markdown_report(results: List[RedteamResult], output_path: Path) -> None:
+def generate_markdown_report(results: list[RedteamResult], output_path: Path) -> None:
     """Generate a simple Markdown report from results."""
     lines = ["# Redteam Report\n"]
 

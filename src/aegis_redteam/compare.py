@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from typing import List, Tuple
 from rich.console import Console
 from rich.table import Table
 
@@ -8,8 +7,8 @@ from aegis_redteam.models import RedteamResult
 
 
 def compare_results(
-    current: List[RedteamResult], baseline: List[RedteamResult]
-) -> Tuple[int, int, int]:
+    current: list[RedteamResult], baseline: list[RedteamResult]
+) -> tuple[int, int, int]:
     """
     Compare current results against a baseline.
     Returns (regressions, improvements, new).

@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from typing import List
 from rich.table import Table
 from rich.console import Console
 
 from aegis_redteam.models import RedteamResult
 
 
-def print_summary(results: List[RedteamResult]) -> None:
+def print_summary(results: list[RedteamResult]) -> None:
     """Print a clean summary table."""
     console = Console()
     table = Table(title="Redteam Summary")
