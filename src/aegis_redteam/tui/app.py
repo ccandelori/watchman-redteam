@@ -1,22 +1,20 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List
 
 from textual.app import App, ComposeResult
 from textual.widgets import Header, Footer, DataTable, Static
-from textual.containers import Vertical
 
 from aegis_redteam.models import RedteamResult
 
 
-class RedteamTUI(App):
+class RedteamTUI(App[None]):
     """TUI for viewing redteam results."""
 
     CSS_PATH = "app.css"
     BINDINGS = [("q", "quit", "Quit")]
 
-    def __init__(self, results: List[RedteamResult] | None = None):
+    def __init__(self, results: list[RedteamResult] | None = None) -> None:
         super().__init__()
         self.results = results or []
 
@@ -31,7 +29,7 @@ class RedteamTUI(App):
         table.add_columns("Scenario", "Status", "Policy", "Detectors")
 
         for result in self.results:
-            status = "✅" if result.passed else "❌"
+            status = "PASS" if result.passed else "FAIL"
             detectors = ", ".join(
                 d.name for tr in result.turn_results for d in tr.detector_results
             ) or "-"
@@ -42,10 +40,10 @@ class RedteamTUI(App):
             table.add_row(result.scenario_name, status, policy, detectors)
 
 
-def load_results(path: Path) -> List[RedteamResult]:
+def load_results(path: Path) -> list[RedteamResult]:
     """Load RedteamResult objects from a JSONL file."""
     import json
-    results = []
+    results: list[RedteamResult] = []
     with path.open() as f:
         for line in f:
             data = json.loads(line)

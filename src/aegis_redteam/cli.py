@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Sequence
 
 import typer
 from rich.console import Console
@@ -12,9 +12,19 @@ from aegis_redteam.runner import run_scenarios
 from aegis_redteam.report import generate_markdown_report
 from aegis_redteam.compare import compare_results
 from aegis_redteam.models import RedteamResult
+from aegis_redteam.redact import redact_secrets
 
 app = typer.Typer(help="Aegis Redteam Runner")
 console = Console()
+
+
+def write_results_jsonl(results: Sequence[RedteamResult], output_path: Path) -> None:
+    """Write redteam results as JSONL after redacting credential-like strings."""
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w") as output_file:
+        for result in results:
+            redacted_result = redact_secrets(result.model_dump())
+            output_file.write(RedteamResult.model_validate(redacted_result).model_dump_json() + "\n")
 
 
 @app.command()
@@ -22,7 +32,7 @@ def run(
     scenarios_dir: Path = typer.Argument(..., help="Directory containing scenario YAML files"),
     target_url: str = typer.Option("http://localhost:8000", "--target", "-t"),
     output: Optional[Path] = typer.Option(None, "--output", "-o", help="Write results to JSONL"),
-):
+) -> None:
     """Run all scenarios in a directory against Aegis."""
     scenarios = load_scenarios(scenarios_dir)
     if not scenarios:
@@ -39,7 +49,7 @@ def run(
     table.add_column("Policy")
 
     for result in results:
-        status = "[green]✅[/green]" if result.passed else "[red]❌[/red]"
+        status = "[green]PASS[/green]" if result.passed else "[red]FAIL[/red]"
 
         detectors_fired = []
         policy_action = "-"
@@ -63,10 +73,7 @@ def run(
     console.print(f"\n[bold]{passed_count}/{len(results)}[/bold] scenarios passed")
 
     if output:
-        output.parent.mkdir(parents=True, exist_ok=True)
-        with output.open("w") as f:
-            for result in results:
-                f.write(result.model_dump_json() + "\n")
+        write_results_jsonl(results, output)
         console.print(f"\nResults written to {output}")
 
 
@@ -74,14 +81,14 @@ def run(
 def run_one(
     scenario_path: Path,
     target_url: str = typer.Option("http://localhost:8000", "--target", "-t"),
-):
+) -> None:
     """Run a single scenario with detailed output."""
     scenario = load_scenario(scenario_path)
     results = run_scenarios([scenario], target_url)
     result = results[0]
 
     console.print(f"[bold cyan]{result.scenario_name}[/bold cyan]")
-    console.print(f"Passed: {'✅' if result.passed else '❌'}")
+    console.print(f"Passed: {'PASS' if result.passed else 'FAIL'}")
     console.print(f"Turns: {len(result.turn_results)}")
 
     for tr in result.turn_results:
@@ -91,7 +98,7 @@ def run_one(
 
 
 @app.command()
-def view(results_file: Path):
+def view(results_file: Path) -> None:
     """View previously saved JSONL results."""
     if not results_file.exists():
         console.print(f"[red]File not found: {results_file}[/red]")
@@ -106,7 +113,7 @@ def view(results_file: Path):
     with results_file.open() as f:
         for line in f:
             data = json.loads(line)
-            status = "✅" if data.get("passed") else "❌"
+            status = "PASS" if data.get("passed") else "FAIL"
             policy = "-"
             if data.get("turn_results"):
                 last = data["turn_results"][-1]
@@ -119,7 +126,7 @@ def view(results_file: Path):
 
 
 @app.command()
-def report(results_file: Path, output: Path = typer.Argument(..., help="Output Markdown file")):
+def report(results_file: Path, output: Path = typer.Argument(..., help="Output Markdown file")) -> None:
     """Generate a Markdown report from a JSONL results file."""
     import json
 
@@ -137,7 +144,7 @@ def report(results_file: Path, output: Path = typer.Argument(..., help="Output M
 def compare(
     current_file: Path,
     baseline_file: Path,
-):
+) -> None:
     """Compare current results against a baseline. Exits with code 1 on regressions."""
     import json
     import sys
@@ -154,7 +161,7 @@ def compare(
             data = json.loads(line)
             baseline.append(RedteamResult.model_validate(data))
 
-    regressions, improvements, new = compare_results(current, baseline)
+    regressions, _improvements, _new = compare_results(current, baseline)
 
     if regressions > 0:
         console.print(f"\n[red]Exiting with code 1 due to {regressions} regression(s).[/red]")
@@ -163,5 +170,10 @@ def compare(
         sys.exit(0)
 
 
-if __name__ == "__main__":
+def main() -> None:
+    """Console script entry point."""
     app()
+
+
+if __name__ == "__main__":
+    main()

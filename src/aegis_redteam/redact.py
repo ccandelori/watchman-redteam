@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List
+from typing import Any
 
 _CREDENTIAL_PATTERN = re.compile(r"sk_live_[A-Za-z0-9]+|sk_test_[A-Za-z0-9]+|Bearer [A-Za-z0-9\-_.~+/]+=*")
 

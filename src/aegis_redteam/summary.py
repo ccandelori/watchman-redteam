@@ -17,7 +17,7 @@ def print_summary(results: List[RedteamResult]) -> None:
     table.add_column("Policy")
 
     for r in results:
-        status = "✅" if r.passed else "❌"
+        status = "PASS" if r.passed else "FAIL"
         detectors = ", ".join(
             d.name for tr in r.turn_results for d in tr.detector_results
         ) or "-"

@@ -14,7 +14,7 @@ def generate_markdown_report(results: List[RedteamResult], output_path: Path) ->
     lines.append(f"**Passed:** {passed}/{len(results)}\n")
 
     for result in results:
-        status = "✅ Passed" if result.passed else "❌ Failed"
+        status = "Passed" if result.passed else "Failed"
         lines.append(f"## {result.scenario_name} — {status}\n")
 
         for tr in result.turn_results:

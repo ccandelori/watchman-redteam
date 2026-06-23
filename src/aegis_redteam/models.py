@@ -45,6 +45,7 @@ class DetectorResult(BaseModel):
 class PolicyDecision(BaseModel):
     final_action: str
     reason: Optional[str] = None
+    triggered_detectors: List[str] = Field(default_factory=list)
 
 
 class TurnResult(BaseModel):

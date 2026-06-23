@@ -87,6 +87,11 @@ class HttpAegisTarget:
                     policy_decision = PolicyDecision(
                         final_action=pol.get("final_action", "unknown"),
                         reason=pol.get("reason"),
+                        triggered_detectors=[
+                            detector_name
+                            for detector_name in pol.get("triggered_detectors", [])
+                            if isinstance(detector_name, str)
+                        ],
                     )
 
                 turn_results.append(
