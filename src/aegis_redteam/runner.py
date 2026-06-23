@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from aegis_redteam.models import Scenario, RedteamResult
-from aegis_redteam.targets.http import HttpAegisTarget
 from aegis_redteam.evaluator import evaluate_failures
+from aegis_redteam.models import RedteamResult, Scenario
+from aegis_redteam.targets.http import HttpAegisTarget
 
 
 def run_scenarios(
@@ -12,11 +12,12 @@ def run_scenarios(
     target = HttpAegisTarget(base_url)
     results: list[RedteamResult] = []
 
-    for scenario in scenarios:
-        result = target.run_scenario(scenario)
-        result.failures.extend(evaluate_failures(result, scenario))
-        result.passed = len(result.failures) == 0
-        results.append(result)
-
-    target.close()
-    return results
+    try:
+        for scenario in scenarios:
+            result = target.run_scenario(scenario)
+            result.failures.extend(evaluate_failures(result, scenario))
+            result.passed = len(result.failures) == 0
+            results.append(result)
+        return results
+    finally:
+        target.close()

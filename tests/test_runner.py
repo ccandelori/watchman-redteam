@@ -2,7 +2,15 @@ from __future__ import annotations
 
 import pytest
 
-from aegis_redteam.models import Expected, PolicyDecision, PolicyExpectation, RedteamResult, Scenario, Turn, TurnResult
+from aegis_redteam.models import (
+    Expected,
+    PolicyDecision,
+    PolicyExpectation,
+    RedteamResult,
+    Scenario,
+    Turn,
+    TurnResult,
+)
 
 
 class FakeTarget:
@@ -31,6 +39,13 @@ class FakeTarget:
         return
 
 
+class CloseTrackingTarget(FakeTarget):
+    closed: bool = False
+
+    def close(self) -> None:
+        type(self).closed = True
+
+
 def test_run_scenarios_appends_evaluator_failures(monkeypatch: pytest.MonkeyPatch) -> None:
     from aegis_redteam import runner
 
@@ -48,3 +63,23 @@ def test_run_scenarios_appends_evaluator_failures(monkeypatch: pytest.MonkeyPatc
     assert result.failures == [
         "Policy expectation failed for runner-policy-failure: expected minimum action block observed allow on turn 1"
     ]
+
+
+def test_run_scenarios_closes_target_when_evaluation_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from aegis_redteam import runner
+
+    scenario = Scenario(
+        name="invalid-policy-expectation",
+        turns=[Turn(role="user", content="leak credential")],
+        expected=Expected(policy=PolicyExpectation(min_final_action="quarantine")),
+    )
+
+    CloseTrackingTarget.closed = False
+    monkeypatch.setattr(runner, "HttpAegisTarget", CloseTrackingTarget)
+
+    with pytest.raises(ValueError, match="Unknown expected policy action"):
+        runner.run_scenarios([scenario], "http://fixture")
+
+    assert CloseTrackingTarget.closed is True
