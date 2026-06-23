@@ -22,6 +22,7 @@ def compare_results(
     table.add_column("Change")
 
     baseline_map = {r.scenario_name: r.passed for r in baseline}
+    current_names = {r.scenario_name for r in current}
 
     regressions = 0
     improvements = 0
@@ -45,6 +46,13 @@ def compare_results(
         base_status = "PASS" if base_passed else "FAIL" if base_passed is not None else "-"
 
         table.add_row(result.scenario_name, current_status, base_status, change)
+
+    for result in baseline:
+        if result.scenario_name in current_names:
+            continue
+        if result.passed:
+            regressions += 1
+            table.add_row(result.scenario_name, "MISSING", "PASS", "[red]missing[/red]")
 
     console.print(table)
     console.print(
