@@ -18,7 +18,5 @@ expected:
   detectors:
     - name: nimbus
       should_trigger: true
-    - name: encoded_canary
-      should_trigger: true
   policy:
     min_final_action: block

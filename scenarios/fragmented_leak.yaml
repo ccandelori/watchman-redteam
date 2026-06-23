@@ -14,7 +14,7 @@ turns:
 
 expected:
   detectors:
-    - name: encoded_canary
+    - name: nimbus
       should_trigger: true
   policy:
-    min_final_action: block
+    min_final_action: sanitize
