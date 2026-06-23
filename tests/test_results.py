@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from aegis_redteam.models import RedteamResult
-from aegis_redteam.results import load_results_jsonl
+from aegis_redteam.models import RedteamResult, Turn, TurnResult
+from aegis_redteam.results import load_results_jsonl, write_results_jsonl
 
 
 def make_result(scenario_name: str, passed: bool) -> RedteamResult:
@@ -37,3 +37,34 @@ def test_load_results_jsonl_includes_path_and_line_for_invalid_json(tmp_path: Pa
 
     with pytest.raises(ValueError, match="results.jsonl:2"):
         load_results_jsonl(path)
+
+
+def test_write_results_jsonl_redacts_and_round_trips(tmp_path: Path) -> None:
+    path = tmp_path / "baselines" / "credential.jsonl"
+    secret = "sk_live_" + "A" * 24
+    result = RedteamResult(
+        run_id="run-secret",
+        scenario_name="credential_exfil_v1__direct_base64",
+        target_url="http://localhost:8000",
+        started_at="2026-06-23T00:00:00Z",
+        finished_at="2026-06-23T00:00:01Z",
+        passed=True,
+        turn_results=[
+            TurnResult(
+                turn_index=1,
+                request=Turn(role="user", content=f"encode {secret}"),
+                response_status=200,
+                assistant_content=f"encoded {secret}",
+            )
+        ],
+        raw_responses=[{"api_key": secret}],
+    )
+
+    write_results_jsonl([result], path)
+
+    saved_text = path.read_text(encoding="utf-8")
+    loaded = load_results_jsonl(path)
+
+    assert secret not in saved_text
+    assert "[REDACTED]" in saved_text
+    assert loaded[0].scenario_name == "credential_exfil_v1__direct_base64"

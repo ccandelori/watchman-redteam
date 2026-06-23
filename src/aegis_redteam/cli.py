@@ -12,25 +12,19 @@ from aegis_redteam.runner import run_scenarios
 from aegis_redteam.report import generate_markdown_report
 from aegis_redteam.compare import compare_results
 from aegis_redteam.models import RedteamResult
-from aegis_redteam.redact import redact_secrets
 from aegis_redteam.doctor import DoctorReport, run_doctor
+from aegis_redteam.campaigns.baseline import CampaignBaselinePromotion, promote_campaign_baseline
 from aegis_redteam.campaigns.compare import CampaignComparison, compare_campaign_results
 from aegis_redteam.campaigns.runner import CampaignRun, run_campaign
-from aegis_redteam.results import load_results_jsonl
+from aegis_redteam.results import load_results_jsonl, write_results_jsonl
 
 app = typer.Typer(help="Aegis Redteam Runner")
 campaign_app = typer.Typer(help="Campaign commands")
+baseline_app = typer.Typer(help="Campaign baseline commands")
+campaign_app.add_typer(baseline_app, name="baseline")
 app.add_typer(campaign_app, name="campaign")
 console = Console()
 
-
-def write_results_jsonl(results: Sequence[RedteamResult], output_path: Path) -> None:
-    """Write redteam results as JSONL after redacting credential-like strings."""
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with output_path.open("w") as output_file:
-        for result in results:
-            redacted_result = redact_secrets(result.model_dump())
-            output_file.write(RedteamResult.model_validate(redacted_result).model_dump_json() + "\n")
 
 
 def print_failure_details(results: Sequence[RedteamResult]) -> None:
@@ -111,6 +105,29 @@ def print_campaign_comparison(comparison: CampaignComparison) -> None:
         f"Improvements: {comparison.improvements} | "
         f"New: {comparison.new_scenarios}"
     )
+
+
+def print_campaign_baseline_promotion(promotion: CampaignBaselinePromotion) -> None:
+    console.print("\n[bold]Campaign baseline promoted[/bold]")
+    console.print(f"Source: {promotion.source_path}")
+    console.print(f"Baseline: {promotion.baseline_path}")
+    console.print(f"Results: {promotion.result_count}")
+    console.print(f"Overwritten: {'yes' if promotion.overwritten else 'no'}")
+
+
+@baseline_app.command("promote")
+def campaign_baseline_promote(
+    source_file: Path = typer.Argument(..., help="Source campaign result JSONL"),
+    baseline_file: Path = typer.Argument(..., help="Baseline JSONL destination"),
+    force: bool = typer.Option(False, "--force", help="Overwrite an existing baseline"),
+) -> None:
+    """Promote campaign result JSONL to a baseline file."""
+    try:
+        promotion = promote_campaign_baseline(source_file, baseline_file, force)
+    except (FileExistsError, ValueError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+    print_campaign_baseline_promotion(promotion)
 
 
 @campaign_app.command("compare")

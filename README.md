@@ -153,13 +153,14 @@ Campaigns generate deterministic scenario variants and then reuse the same runne
 uv run --locked --extra dev aegis-redteam campaign run campaigns/credential_exfil.yaml --target http://127.0.0.1:8799 --output results/campaign-v1.jsonl --generated-dir generated/campaign-v1
 ```
 
-Generated scenario YAML is explicit and replayable with the normal `run` command. Campaign result JSONL stays in the normal `RedteamResult` format, so it can be compared against a baseline:
+Generated scenario YAML is explicit and replayable with the normal `run` command. Campaign result JSONL stays in the normal `RedteamResult` format, so it can be promoted to a baseline and compared later:
 
 ```bash
-uv run --locked --extra dev aegis-redteam campaign compare results/campaign-v1.jsonl results/campaign-baseline.jsonl
+uv run --locked --extra dev aegis-redteam campaign baseline promote results/campaign-v1.jsonl baselines/credential-exfil-v1.jsonl
+uv run --locked --extra dev aegis-redteam campaign compare results/campaign-v1.jsonl baselines/credential-exfil-v1.jsonl
 ```
 
-The campaign compare command exits nonzero when regressions are detected.
+Baseline promotion validates the source JSONL, creates parent directories, and refuses to overwrite an existing baseline unless `--force` is passed. The campaign compare command exits nonzero when regressions are detected.
 
 ## Architecture
 

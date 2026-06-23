@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from json import JSONDecodeError
 from pathlib import Path
 
 from pydantic import ValidationError
 
 from aegis_redteam.models import RedteamResult
+from aegis_redteam.redact import redact_secrets
 
 
 def load_results_jsonl(path: Path) -> list[RedteamResult]:
@@ -24,3 +26,11 @@ def load_results_jsonl(path: Path) -> list[RedteamResult]:
             except ValidationError as exc:
                 raise ValueError(f"{path}:{line_number}: invalid RedteamResult: {exc}") from exc
     return results
+
+
+def write_results_jsonl(results: Sequence[RedteamResult], output_path: Path) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", encoding="utf-8") as output_file:
+        for result in results:
+            redacted_result = redact_secrets(result.model_dump())
+            output_file.write(RedteamResult.model_validate(redacted_result).model_dump_json() + "\n")

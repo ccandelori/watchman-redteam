@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
+from aegis_redteam.campaigns.baseline import CampaignBaselinePromotion
 from aegis_redteam.campaigns.compare import CampaignComparison
 from aegis_redteam.doctor import DoctorCheck, DoctorReport
 from aegis_redteam.campaigns.models import Campaign
@@ -45,7 +46,7 @@ def test_cli_exposes_configured_entrypoint() -> None:
 
 
 def test_write_results_jsonl_redacts_secrets(tmp_path: Path) -> None:
-    from aegis_redteam.cli import write_results_jsonl
+    from aegis_redteam.results import write_results_jsonl
 
     output_path = tmp_path / "results.jsonl"
     secret = "sk_live_1234567890abcdef"
@@ -390,3 +391,111 @@ def test_campaign_compare_command_exits_nonzero_with_regressions(
     assert "Campaign comparison" in result.output
     assert "Regressions: 2" in result.output
     assert "regression(s)" in result.output
+
+
+
+def test_campaign_baseline_promote_command_reports_written_baseline(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from aegis_redteam import cli
+
+    source_path = tmp_path / "campaign.jsonl"
+    baseline_path = tmp_path / "baselines" / "credential.jsonl"
+    source_path.write_text("", encoding="utf-8")
+
+    def fake_promote_campaign_baseline(
+        source_arg: Path,
+        baseline_arg: Path,
+        force: bool,
+    ) -> CampaignBaselinePromotion:
+        assert source_arg == source_path
+        assert baseline_arg == baseline_path
+        assert force is False
+        return CampaignBaselinePromotion(
+            source_path=source_arg,
+            baseline_path=baseline_arg,
+            result_count=5,
+            overwritten=False,
+        )
+
+    monkeypatch.setattr(cli, "promote_campaign_baseline", fake_promote_campaign_baseline)
+
+    result = CliRunner().invoke(
+        cli.app,
+        ["campaign", "baseline", "promote", str(source_path), str(baseline_path)],
+    )
+
+    assert result.exit_code == 0
+    assert "Campaign baseline promoted" in result.output
+    assert "Results: 5" in result.output
+    assert baseline_path.name in result.output
+
+
+def test_campaign_baseline_promote_command_forwards_force(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from aegis_redteam import cli
+
+    source_path = tmp_path / "campaign.jsonl"
+    baseline_path = tmp_path / "baseline.jsonl"
+    source_path.write_text("", encoding="utf-8")
+
+    def fake_promote_campaign_baseline(
+        source_arg: Path,
+        baseline_arg: Path,
+        force: bool,
+    ) -> CampaignBaselinePromotion:
+        assert force is True
+        return CampaignBaselinePromotion(
+            source_path=source_arg,
+            baseline_path=baseline_arg,
+            result_count=1,
+            overwritten=True,
+        )
+
+    monkeypatch.setattr(cli, "promote_campaign_baseline", fake_promote_campaign_baseline)
+
+    result = CliRunner().invoke(
+        cli.app,
+        [
+            "campaign",
+            "baseline",
+            "promote",
+            str(source_path),
+            str(baseline_path),
+            "--force",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Overwritten: yes" in result.output
+
+
+def test_campaign_baseline_promote_command_exits_nonzero_when_baseline_exists(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from aegis_redteam import cli
+
+    source_path = tmp_path / "campaign.jsonl"
+    baseline_path = tmp_path / "baseline.jsonl"
+    source_path.write_text("", encoding="utf-8")
+
+    def fake_promote_campaign_baseline(
+        source_arg: Path,
+        baseline_arg: Path,
+        force: bool,
+    ) -> CampaignBaselinePromotion:
+        raise FileExistsError(f"Baseline already exists: {baseline_arg}")
+
+    monkeypatch.setattr(cli, "promote_campaign_baseline", fake_promote_campaign_baseline)
+
+    result = CliRunner().invoke(
+        cli.app,
+        ["campaign", "baseline", "promote", str(source_path), str(baseline_path)],
+    )
+
+    assert result.exit_code == 1
+    assert "Baseline already exists" in result.output
