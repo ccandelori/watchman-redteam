@@ -101,6 +101,8 @@ class HttpAegisTarget:
                     )
                 )
 
+            except httpx.ConnectError as exc:
+                failures.append(f"Could not connect to {self.base_url}: {exc}")
             except Exception as exc:
                 failures.append(f"Turn {idx} failed: {exc}")
 
