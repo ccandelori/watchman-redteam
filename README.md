@@ -4,7 +4,7 @@ External red teaming framework for Aegis. The runner treats Aegis as a black-box
 
 ## Prerequisites
 
-Use Python 3.11 to match CI, and install `uv` before running the quick-start commands.
+Use Python 3.11 to match CI, and install `uv` before running the quick-start commands. The repository includes `.python-version` so `uv` and common Python version managers default to the CI Python family.
 
 ```bash
 python3 --version
