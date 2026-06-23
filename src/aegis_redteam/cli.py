@@ -138,8 +138,9 @@ def compare(
     current_file: Path,
     baseline_file: Path,
 ):
-    """Compare current results against a baseline."""
+    """Compare current results against a baseline. Exits with code 1 on regressions."""
     import json
+    import sys
 
     current = []
     with current_file.open() as f:
@@ -153,7 +154,13 @@ def compare(
             data = json.loads(line)
             baseline.append(RedteamResult.model_validate(data))
 
-    compare_results(current, baseline)
+    regressions, improvements, new = compare_results(current, baseline)
+
+    if regressions > 0:
+        console.print(f"\n[red]Exiting with code 1 due to {regressions} regression(s).[/red]")
+        sys.exit(1)
+    else:
+        sys.exit(0)
 
 
 if __name__ == "__main__":

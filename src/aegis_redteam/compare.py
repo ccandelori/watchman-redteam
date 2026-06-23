@@ -1,14 +1,19 @@
 from __future__ import annotations
 
-from typing import List
+from typing import List, Tuple
 from rich.console import Console
 from rich.table import Table
 
 from aegis_redteam.models import RedteamResult
 
 
-def compare_results(current: List[RedteamResult], baseline: List[RedteamResult]) -> None:
-    """Compare current results against a baseline and print differences."""
+def compare_results(
+    current: List[RedteamResult], baseline: List[RedteamResult]
+) -> Tuple[int, int, int]:
+    """
+    Compare current results against a baseline.
+    Returns (regressions, improvements, new).
+    """
     console = Console()
     table = Table(title="Regression Comparison")
     table.add_column("Scenario")
@@ -20,11 +25,13 @@ def compare_results(current: List[RedteamResult], baseline: List[RedteamResult])
 
     regressions = 0
     improvements = 0
+    new_scenarios = 0
 
     for result in current:
         base_passed = baseline_map.get(result.scenario_name)
         if base_passed is None:
-            change = "new"
+            change = "[yellow]new[/yellow]"
+            new_scenarios += 1
         elif result.passed and not base_passed:
             change = "[green]improved[/green]"
             improvements += 1
@@ -40,4 +47,7 @@ def compare_results(current: List[RedteamResult], baseline: List[RedteamResult])
         table.add_row(result.scenario_name, current_status, base_status, change)
 
     console.print(table)
-    console.print(f"\nRegressions: {regressions} | Improvements: {improvements}")
+    console.print(
+        f"\nRegressions: {regressions} | Improvements: {improvements} | New: {new_scenarios}"
+    )
+    return regressions, improvements, new_scenarios
