@@ -5,7 +5,7 @@ This document defines the HTTP interface that Aegis exposes for black-box intera
 ## Base Assumptions
 
 - Aegis exposes an OpenAI-compatible chat completions endpoint.
-- Chat responses include a top-level `aegis` metadata block containing detector results, a policy decision, and trace identifiers.
+- Chat responses include a required top-level `aegis` metadata block containing detector results, a policy decision, and trace identifiers when available.
 - The service is intended to run locally during development and testing.
 - No authentication is required in the initial version.
 
@@ -55,7 +55,28 @@ The runner sends standard OpenAI-style chat fields and translates scenario `targ
 
 #### Response
 
-Current Watchman/Aegis mock proxy responses use this top-level shape:
+The response must be OpenAI-compatible enough for the runner to read assistant content from `choices[0].message.content` when present. The Aegis metadata block is required.
+
+Minimal valid allow response:
+
+```json
+{
+  "choices": [
+    {
+      "message": {"role": "assistant", "content": "..."}
+    }
+  ],
+  "aegis": {
+    "detector_results": [],
+    "policy_decision": {
+      "final_action": "allow",
+      "triggered_detectors": []
+    }
+  }
+}
+```
+
+Detector response shape:
 
 ```json
 {
@@ -95,20 +116,25 @@ Current Watchman/Aegis mock proxy responses use this top-level shape:
 }
 ```
 
-`HttpAegisTarget` treats non-2xx chat responses as failed turns and includes the response status and body in `RedteamResult.failures`.
+`HttpAegisTarget` fails closed when required fields are missing or malformed:
+
+- top-level `aegis`
+- `aegis.detector_results`
+- `aegis.policy_decision`
+- `aegis.policy_decision.final_action`
+- `aegis.detector_results[*].detector_name` or `aegis.detector_results[*].name`
+
+`HttpAegisTarget` treats every non-2xx chat response as a failed turn and includes the response status and redacted body in `RedteamResult.failures`.
 
 ### `GET /audit/recent`
 
-Returns recent audit events for analysis.
+Returns recent audit events for analysis. This endpoint is optional for the redteam runner v0 and is not required by the current CLI scenario execution path.
 
-## Current Live E2E Blocker
+## Live Target Requirements
 
-The sibling Watchman repo currently has an in-process `MockProxyApp` and unit tests around `/v1/chat/completions`, but this session did not find a checked-in HTTP server entry point that exposes that app on `localhost:8000`. A live encoded-leakage E2E run is therefore blocked until one of these is available:
+A live encoded-leakage E2E run requires a running Aegis HTTP server exposing `/health`, `/test/reset`, and `/v1/chat/completions`. The deterministic fixture server in this repository is only a redteam-owned smoke target for validating the runner path.
 
-- a running Aegis HTTP server exposing `/health`, `/test/reset`, and `/v1/chat/completions`; or
-- a thin development HTTP wrapper around `aegis.proxy.mock_app.create_default_proxy` in the Watchman repo.
-
-Once a server is available, the expected smoke command is:
+Expected live smoke command:
 
 ```bash
 uv run --extra dev aegis-redteam run scenarios/ --target http://localhost:8000 --output results/latest.jsonl
