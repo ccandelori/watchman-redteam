@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
+from aegis_redteam.campaigns.compare import CampaignComparison
 from aegis_redteam.doctor import DoctorCheck, DoctorReport
 from aegis_redteam.campaigns.models import Campaign
 from aegis_redteam.campaigns.runner import CampaignRun
@@ -331,3 +332,61 @@ def test_campaign_run_command_requires_output_and_generated_dir(
     assert missing_generated_dir.exit_code != 0
     assert "--generated-dir" in missing_generated_dir.output
     assert invoked is False
+
+
+
+def test_campaign_compare_command_exits_zero_without_regressions(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from aegis_redteam import cli
+
+    current_path = tmp_path / "current.jsonl"
+    baseline_path = tmp_path / "baseline.jsonl"
+    current_path.write_text("", encoding="utf-8")
+    baseline_path.write_text("", encoding="utf-8")
+
+    def fake_compare_campaign_results(current_arg: Path, baseline_arg: Path) -> CampaignComparison:
+        assert current_arg == current_path
+        assert baseline_arg == baseline_path
+        return CampaignComparison(regressions=0, improvements=1, new_scenarios=2)
+
+    monkeypatch.setattr(cli, "compare_campaign_results", fake_compare_campaign_results)
+
+    result = CliRunner().invoke(
+        cli.app,
+        ["campaign", "compare", str(current_path), str(baseline_path)],
+    )
+
+    assert result.exit_code == 0
+    assert "Campaign comparison" in result.output
+    assert "Regressions: 0" in result.output
+    assert "Improvements: 1" in result.output
+    assert "New: 2" in result.output
+
+
+def test_campaign_compare_command_exits_nonzero_with_regressions(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from aegis_redteam import cli
+
+    current_path = tmp_path / "current.jsonl"
+    baseline_path = tmp_path / "baseline.jsonl"
+    current_path.write_text("", encoding="utf-8")
+    baseline_path.write_text("", encoding="utf-8")
+
+    def fake_compare_campaign_results(current_arg: Path, baseline_arg: Path) -> CampaignComparison:
+        return CampaignComparison(regressions=2, improvements=0, new_scenarios=0)
+
+    monkeypatch.setattr(cli, "compare_campaign_results", fake_compare_campaign_results)
+
+    result = CliRunner().invoke(
+        cli.app,
+        ["campaign", "compare", str(current_path), str(baseline_path)],
+    )
+
+    assert result.exit_code == 1
+    assert "Campaign comparison" in result.output
+    assert "Regressions: 2" in result.output
+    assert "regression(s)" in result.output

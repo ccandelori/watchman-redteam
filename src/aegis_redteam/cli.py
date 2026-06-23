@@ -14,7 +14,9 @@ from aegis_redteam.compare import compare_results
 from aegis_redteam.models import RedteamResult
 from aegis_redteam.redact import redact_secrets
 from aegis_redteam.doctor import DoctorReport, run_doctor
+from aegis_redteam.campaigns.compare import CampaignComparison, compare_campaign_results
 from aegis_redteam.campaigns.runner import CampaignRun, run_campaign
+from aegis_redteam.results import load_results_jsonl
 
 app = typer.Typer(help="Aegis Redteam Runner")
 campaign_app = typer.Typer(help="Campaign commands")
@@ -99,6 +101,30 @@ def campaign_run(
 
     print_failure_details(campaign_run_result.results)
     if any(not result.passed for result in campaign_run_result.results):
+        raise typer.Exit(1)
+
+
+def print_campaign_comparison(comparison: CampaignComparison) -> None:
+    console.print("\n[bold]Campaign comparison[/bold]")
+    console.print(
+        f"Regressions: {comparison.regressions} | "
+        f"Improvements: {comparison.improvements} | "
+        f"New: {comparison.new_scenarios}"
+    )
+
+
+@campaign_app.command("compare")
+def campaign_compare(
+    current_file: Path = typer.Argument(..., help="Current campaign result JSONL"),
+    baseline_file: Path = typer.Argument(..., help="Baseline campaign result JSONL"),
+) -> None:
+    """Compare campaign result JSONL against a baseline."""
+    comparison = compare_campaign_results(current_file, baseline_file)
+    print_campaign_comparison(comparison)
+    if comparison.regressions > 0:
+        console.print(
+            f"\n[red]Exiting with code 1 due to {comparison.regressions} regression(s).[/red]"
+        )
         raise typer.Exit(1)
 
 
@@ -231,20 +257,10 @@ def compare(
     baseline_file: Path,
 ) -> None:
     """Compare current results against a baseline. Exits with code 1 on regressions."""
-    import json
     import sys
 
-    current = []
-    with current_file.open() as f:
-        for line in f:
-            data = json.loads(line)
-            current.append(RedteamResult.model_validate(data))
-
-    baseline = []
-    with baseline_file.open() as f:
-        for line in f:
-            data = json.loads(line)
-            baseline.append(RedteamResult.model_validate(data))
+    current = load_results_jsonl(current_file)
+    baseline = load_results_jsonl(baseline_file)
 
     regressions, _improvements, _new = compare_results(current, baseline)
 
