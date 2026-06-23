@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 import uuid
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 import httpx
 
@@ -12,7 +12,7 @@ from aegis_redteam.models import Scenario, RedteamResult, TurnResult, DetectorRe
 class HttpAegisTarget:
     """Black-box HTTP target for Aegis."""
 
-    def __init__(self, base_url: str, timeout: float = 30.0):
+    def __init__(self, base_url: str, timeout: float = 30.0) -> None:
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self.client = httpx.Client(timeout=timeout)
@@ -31,9 +31,9 @@ class HttpAegisTarget:
         run_id = str(uuid.uuid4())
         started_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
-        turn_results = []
-        raw_responses = []
-        failures = []
+        turn_results: list[TurnResult] = []
+        raw_responses: list[Dict[str, Any]] = []
+        failures: list[str] = []
 
         if scenario.target_controls.reset_before_run:
             try:
@@ -66,8 +66,8 @@ class HttpAegisTarget:
                 raw_responses.append(raw)
 
                 assistant_content = None
-                aegis_meta = raw.get("aegis", {})
-                detector_results = []
+                aegis_meta: Dict[str, Any] = raw.get("aegis", {})
+                detector_results: list[DetectorResult] = []
                 policy_decision = None
 
                 if "choices" in raw and raw["choices"]:
@@ -121,5 +121,5 @@ class HttpAegisTarget:
             raw_responses=raw_responses,
         )
 
-    def close(self):
+    def close(self) -> None:
         self.client.close()
