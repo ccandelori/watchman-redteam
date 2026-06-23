@@ -7,7 +7,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from aegis_redteam.scenarios.loader import load_scenarios
+from aegis_redteam.scenarios.loader import load_scenarios, load_scenario
 from aegis_redteam.runner import run_scenarios
 
 app = typer.Typer(help="Aegis Redteam Runner")
@@ -68,6 +68,26 @@ def run(
 
 
 @app.command()
+def run_one(
+    scenario_path: Path,
+    target_url: str = typer.Option("http://localhost:8000", "--target", "-t"),
+):
+    """Run a single scenario with detailed output."""
+    scenario = load_scenario(scenario_path)
+    results = run_scenarios([scenario], target_url)
+    result = results[0]
+
+    console.print(f"[bold cyan]{result.scenario_name}[/bold cyan]")
+    console.print(f"Passed: {'✅' if result.passed else '❌'}")
+    console.print(f"Turns: {len(result.turn_results)}")
+
+    for tr in result.turn_results:
+        console.print(f"\n[bold]Turn {tr.turn_index}[/bold]")
+        console.print(f"  Policy: {tr.policy_decision.final_action if tr.policy_decision else '-'}")
+        console.print(f"  Detectors: {[d.name for d in tr.detector_results]}")
+
+
+@app.command()
 def view(results_file: Path):
     """View previously saved JSONL results."""
     if not results_file.exists():
@@ -79,9 +99,10 @@ def view(results_file: Path):
     table.add_column("Passed")
     table.add_column("Policy")
 
+    import json
     with results_file.open() as f:
         for line in f:
-            data = __import__("json").loads(line)
+            data = json.loads(line)
             status = "✅" if data.get("passed") else "❌"
             policy = "-"
             if data.get("turn_results"):
