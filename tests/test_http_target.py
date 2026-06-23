@@ -133,3 +133,34 @@ def test_http_target_marks_reset_http_error_as_failure() -> None:
             "{'error': 'reset unavailable'}"
         ]
         target.close()
+
+
+def test_http_target_reports_malformed_aegis_metadata() -> None:
+    base_url = "http://localhost:8000"
+
+    scenario = Scenario(
+        name="test_malformed_aegis",
+        turns=[Turn(role="user", content="hello")],
+        target_controls=TargetControls(),
+    )
+
+    with respx.mock:
+        respx.post(f"{base_url}/v1/chat/completions").mock(
+            return_value=Response(
+                200,
+                json={
+                    "choices": [{"message": {"content": "mocked response"}}],
+                    "aegis": [],
+                },
+            )
+        )
+
+        target = HttpAegisTarget(base_url)
+        result = target.run_scenario(scenario)
+
+        assert result.passed is False
+        assert result.turn_results == []
+        assert result.failures == [
+            "Malformed target response on turn 1: expected 'aegis' to be an object"
+        ]
+        target.close()

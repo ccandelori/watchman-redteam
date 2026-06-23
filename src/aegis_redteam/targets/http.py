@@ -22,6 +22,13 @@ def _response_body(response: httpx.Response) -> dict[str, Any]:
     return {"body": payload}
 
 
+def _aegis_metadata(response_body: dict[str, Any]) -> dict[str, Any]:
+    metadata = response_body.get("aegis", {})
+    if not isinstance(metadata, dict):
+        raise ValueError("expected 'aegis' to be an object")
+    return metadata
+
+
 class HttpAegisTarget:
     """Black-box HTTP target for Aegis."""
 
@@ -58,7 +65,7 @@ class HttpAegisTarget:
                         f"Reset returned HTTP {reset_response.status_code} from {reset_url}: "
                         f"{reset_body}"
                     )
-            except Exception as exc:
+            except httpx.HTTPError as exc:
                 failures.append(f"Failed to reset: {exc}")
 
         session_id = scenario.target_controls.session_id or scenario.name
@@ -100,7 +107,7 @@ class HttpAegisTarget:
                     continue
 
                 assistant_content = None
-                aegis_meta: dict[str, Any] = raw.get("aegis", {})
+                aegis_meta = _aegis_metadata(raw)
                 detector_results: list[DetectorResult] = []
                 policy_decision = None
 
@@ -142,8 +149,10 @@ class HttpAegisTarget:
 
             except httpx.ConnectError as exc:
                 failures.append(f"Could not connect to {self.base_url}: {exc}")
-            except Exception as exc:
-                failures.append(f"Turn {idx} failed: {exc}")
+            except httpx.HTTPError as exc:
+                failures.append(f"Turn {idx} HTTP request failed: {exc}")
+            except ValueError as exc:
+                failures.append(f"Malformed target response on turn {idx}: {exc}")
 
         finished_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         passed = len(failures) == 0
