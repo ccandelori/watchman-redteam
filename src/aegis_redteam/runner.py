@@ -4,7 +4,7 @@ from typing import List
 
 from aegis_redteam.models import Scenario, RedteamResult
 from aegis_redteam.targets.http import HttpAegisTarget
-from aegis_redteam.evaluator import evaluate_result
+from aegis_redteam.evaluator import evaluate_failures
 
 
 def run_scenarios(
@@ -16,7 +16,8 @@ def run_scenarios(
 
     for scenario in scenarios:
         result = target.run_scenario(scenario)
-        result.passed = evaluate_result(result, scenario)
+        result.failures.extend(evaluate_failures(result, scenario))
+        result.passed = len(result.failures) == 0
         results.append(result)
 
     target.close()
