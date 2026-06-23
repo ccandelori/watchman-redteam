@@ -67,5 +67,32 @@ def run(
         console.print(f"\nResults written to {output}")
 
 
+@app.command()
+def view(results_file: Path):
+    """View previously saved JSONL results."""
+    if not results_file.exists():
+        console.print(f"[red]File not found: {results_file}[/red]")
+        raise typer.Exit(1)
+
+    table = Table(title=f"Results from {results_file.name}")
+    table.add_column("Scenario")
+    table.add_column("Passed")
+    table.add_column("Policy")
+
+    with results_file.open() as f:
+        for line in f:
+            data = __import__("json").loads(line)
+            status = "✅" if data.get("passed") else "❌"
+            policy = "-"
+            if data.get("turn_results"):
+                last = data["turn_results"][-1]
+                if last.get("policy_decision"):
+                    policy = last["policy_decision"].get("final_action", "-")
+
+            table.add_row(data["scenario_name"], status, policy)
+
+    console.print(table)
+
+
 if __name__ == "__main__":
     app()
