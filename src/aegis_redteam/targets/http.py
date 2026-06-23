@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import time
 import uuid
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
-from aegis_redteam.models import Scenario, RedteamResult, TurnResult, DetectorResult, PolicyDecision
+from aegis_redteam.models import DetectorResult, PolicyDecision, RedteamResult, Scenario, TurnResult
 from aegis_redteam.redact import redact_secrets
 
 
@@ -26,7 +26,99 @@ def _aegis_metadata(response_body: dict[str, Any]) -> dict[str, Any]:
     metadata = response_body.get("aegis", {})
     if not isinstance(metadata, dict):
         raise ValueError("expected 'aegis' to be an object")
-    return metadata
+    return cast(dict[str, Any], metadata)
+
+
+def _assistant_content(response_body: dict[str, Any]) -> str | None:
+    choices = response_body.get("choices")
+    if choices is None:
+        return None
+    if not isinstance(choices, list):
+        raise ValueError("expected 'choices' to be a list")
+    if len(choices) == 0:
+        return None
+
+    first_choice = choices[0]
+    if not isinstance(first_choice, dict):
+        raise ValueError("expected 'choices[0]' to be an object")
+
+    message = first_choice.get("message")
+    if message is None:
+        return None
+    if not isinstance(message, dict):
+        raise ValueError("expected 'choices[0].message' to be an object")
+
+    content = message.get("content")
+    if content is None:
+        return None
+    if not isinstance(content, str):
+        raise ValueError("expected 'choices[0].message.content' to be a string")
+    return content
+
+
+def _detector_results(aegis_metadata: dict[str, Any]) -> list[DetectorResult]:
+    detector_payloads = aegis_metadata.get("detector_results", [])
+    if not isinstance(detector_payloads, list):
+        raise ValueError("expected 'aegis.detector_results' to be a list")
+
+    detector_results: list[DetectorResult] = []
+    for index, detector_payload in enumerate(detector_payloads):
+        if not isinstance(detector_payload, dict):
+            raise ValueError(f"expected 'aegis.detector_results[{index}]' to be an object")
+
+        detector_name = detector_payload.get(
+            "name",
+            detector_payload.get("detector_name", "unknown"),
+        )
+        if not isinstance(detector_name, str):
+            raise ValueError(f"expected 'aegis.detector_results[{index}].detector_name' to be a string")
+
+        evidence = detector_payload.get("evidence", {})
+        if not isinstance(evidence, dict):
+            raise ValueError(f"expected 'aegis.detector_results[{index}].evidence' to be an object")
+
+        detector_results.append(
+            DetectorResult(
+                name=detector_name,
+                evidence=cast(dict[str, Any], evidence),
+            )
+        )
+    return detector_results
+
+
+def _policy_decision(aegis_metadata: dict[str, Any]) -> PolicyDecision | None:
+    policy_payload = aegis_metadata.get("policy_decision")
+    if policy_payload is None:
+        return None
+    if not isinstance(policy_payload, dict):
+        raise ValueError("expected 'aegis.policy_decision' to be an object")
+
+    final_action = policy_payload.get("final_action", "unknown")
+    if not isinstance(final_action, str):
+        raise ValueError("expected 'aegis.policy_decision.final_action' to be a string")
+
+    reason = policy_payload.get("reason")
+    if reason is not None and not isinstance(reason, str):
+        raise ValueError("expected 'aegis.policy_decision.reason' to be a string")
+
+    triggered_detectors_payload = policy_payload.get("triggered_detectors", [])
+    if not isinstance(triggered_detectors_payload, list):
+        raise ValueError("expected 'aegis.policy_decision.triggered_detectors' to be a list")
+
+    triggered_detectors: list[str] = []
+    for index, detector_name in enumerate(triggered_detectors_payload):
+        if not isinstance(detector_name, str):
+            raise ValueError(
+                "expected 'aegis.policy_decision.triggered_detectors"
+                f"[{index}]' to be a string"
+            )
+        triggered_detectors.append(detector_name)
+
+    return PolicyDecision(
+        final_action=final_action,
+        reason=reason,
+        triggered_detectors=triggered_detectors,
+    )
 
 
 class HttpAegisTarget:
@@ -106,43 +198,16 @@ class HttpAegisTarget:
                     )
                     continue
 
-                assistant_content = None
                 aegis_meta = _aegis_metadata(raw)
-                detector_results: list[DetectorResult] = []
-                policy_decision = None
-
-                if "choices" in raw and raw["choices"]:
-                    assistant_content = raw["choices"][0]["message"].get("content")
-
-                for d in aegis_meta.get("detector_results", []):
-                    detector_results.append(
-                        DetectorResult(
-                            name=d.get("name", d.get("detector_name", "unknown")),
-                            evidence=d.get("evidence", {}),
-                        )
-                    )
-
-                if "policy_decision" in aegis_meta:
-                    pol = aegis_meta["policy_decision"]
-                    policy_decision = PolicyDecision(
-                        final_action=pol.get("final_action", "unknown"),
-                        reason=pol.get("reason"),
-                        triggered_detectors=[
-                            detector_name
-                            for detector_name in pol.get("triggered_detectors", [])
-                            if isinstance(detector_name, str)
-                        ],
-                    )
-
                 turn_results.append(
                     TurnResult(
                         turn_index=idx,
                         request=turn,
                         response_status=resp.status_code,
-                        assistant_content=assistant_content,
+                        assistant_content=_assistant_content(raw),
                         aegis_metadata=aegis_meta,
-                        detector_results=detector_results,
-                        policy_decision=policy_decision,
+                        detector_results=_detector_results(aegis_meta),
+                        policy_decision=_policy_decision(aegis_meta),
                         latency_ms=latency,
                     )
                 )

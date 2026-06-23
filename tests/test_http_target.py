@@ -164,3 +164,65 @@ def test_http_target_reports_malformed_aegis_metadata() -> None:
             "Malformed target response on turn 1: expected 'aegis' to be an object"
         ]
         target.close()
+
+
+def test_http_target_reports_malformed_detector_results() -> None:
+    base_url = "http://localhost:8000"
+
+    scenario = Scenario(
+        name="test_malformed_detectors",
+        turns=[Turn(role="user", content="hello")],
+        target_controls=TargetControls(),
+    )
+
+    with respx.mock:
+        respx.post(f"{base_url}/v1/chat/completions").mock(
+            return_value=Response(
+                200,
+                json={
+                    "choices": [{"message": {"content": "mocked response"}}],
+                    "aegis": {"detector_results": "encoded_canary"},
+                },
+            )
+        )
+
+        target = HttpAegisTarget(base_url)
+        result = target.run_scenario(scenario)
+
+        assert result.passed is False
+        assert result.turn_results == []
+        assert result.failures == [
+            "Malformed target response on turn 1: expected 'aegis.detector_results' to be a list"
+        ]
+        target.close()
+
+
+def test_http_target_reports_malformed_policy_decision() -> None:
+    base_url = "http://localhost:8000"
+
+    scenario = Scenario(
+        name="test_malformed_policy",
+        turns=[Turn(role="user", content="hello")],
+        target_controls=TargetControls(),
+    )
+
+    with respx.mock:
+        respx.post(f"{base_url}/v1/chat/completions").mock(
+            return_value=Response(
+                200,
+                json={
+                    "choices": [{"message": {"content": "mocked response"}}],
+                    "aegis": {"detector_results": [], "policy_decision": "block"},
+                },
+            )
+        )
+
+        target = HttpAegisTarget(base_url)
+        result = target.run_scenario(scenario)
+
+        assert result.passed is False
+        assert result.turn_results == []
+        assert result.failures == [
+            "Malformed target response on turn 1: expected 'aegis.policy_decision' to be an object"
+        ]
+        target.close()
