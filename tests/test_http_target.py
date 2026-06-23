@@ -73,3 +73,63 @@ def test_http_target_preserves_policy_triggered_detectors() -> None:
         assert result.turn_results[0].policy_decision is not None
         assert result.turn_results[0].policy_decision.triggered_detectors == ["encoded_canary"]
         target.close()
+
+
+def test_http_target_marks_chat_http_error_as_failure() -> None:
+    base_url = "http://localhost:8000"
+
+    scenario = Scenario(
+        name="test_chat_error",
+        turns=[Turn(role="user", content="hello")],
+        target_controls=TargetControls(),
+    )
+
+    with respx.mock:
+        respx.post(f"{base_url}/v1/chat/completions").mock(
+            return_value=Response(500, json={"error": "internal failure"})
+        )
+
+        target = HttpAegisTarget(base_url)
+        result = target.run_scenario(scenario)
+
+        assert result.passed is False
+        assert result.turn_results[0].response_status == 500
+        assert result.failures == [
+            "Turn 1 returned HTTP 500 from http://localhost:8000/v1/chat/completions: "
+            "{'error': 'internal failure'}"
+        ]
+        target.close()
+
+
+def test_http_target_marks_reset_http_error_as_failure() -> None:
+    base_url = "http://localhost:8000"
+
+    scenario = Scenario(
+        name="test_reset_error",
+        turns=[Turn(role="user", content="hello")],
+        target_controls=TargetControls(reset_before_run=True),
+    )
+
+    with respx.mock:
+        respx.post(f"{base_url}/test/reset").mock(
+            return_value=Response(503, json={"error": "reset unavailable"})
+        )
+        respx.post(f"{base_url}/v1/chat/completions").mock(
+            return_value=Response(
+                200,
+                json={
+                    "choices": [{"message": {"content": "mocked response"}}],
+                    "aegis": {"detector_results": [], "policy_decision": {"final_action": "allow"}},
+                },
+            )
+        )
+
+        target = HttpAegisTarget(base_url)
+        result = target.run_scenario(scenario)
+
+        assert result.passed is False
+        assert result.failures == [
+            "Reset returned HTTP 503 from http://localhost:8000/test/reset: "
+            "{'error': 'reset unavailable'}"
+        ]
+        target.close()

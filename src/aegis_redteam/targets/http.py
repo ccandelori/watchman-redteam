@@ -10,6 +10,18 @@ from aegis_redteam.models import Scenario, RedteamResult, TurnResult, DetectorRe
 from aegis_redteam.redact import redact_secrets
 
 
+def _response_body(response: httpx.Response) -> Dict[str, Any]:
+    if response.text == "":
+        return {}
+    try:
+        payload = response.json()
+    except ValueError:
+        return {"body": response.text}
+    if isinstance(payload, dict):
+        return payload
+    return {"body": payload}
+
+
 class HttpAegisTarget:
     """Black-box HTTP target for Aegis."""
 
@@ -37,8 +49,15 @@ class HttpAegisTarget:
         failures: list[str] = []
 
         if scenario.target_controls.reset_before_run:
+            reset_url = f"{self.base_url}/test/reset"
             try:
-                self.client.post(f"{self.base_url}/test/reset", json={})
+                reset_response = self.client.post(reset_url, json={})
+                reset_body = redact_secrets(_response_body(reset_response))
+                if reset_response.status_code >= 400:
+                    failures.append(
+                        f"Reset returned HTTP {reset_response.status_code} from {reset_url}: "
+                        f"{reset_body}"
+                    )
             except Exception as exc:
                 failures.append(f"Failed to reset: {exc}")
 
@@ -59,12 +78,26 @@ class HttpAegisTarget:
 
             start = time.time()
             try:
-                resp = self.client.post(
-                    f"{self.base_url}/v1/chat/completions", json=payload
-                )
+                chat_url = f"{self.base_url}/v1/chat/completions"
+                resp = self.client.post(chat_url, json=payload)
                 latency = int((time.time() - start) * 1000)
-                raw = resp.json() if resp.text else {}
+                raw = _response_body(resp)
                 raw_responses.append(redact_secrets(raw))
+
+                if resp.status_code >= 400:
+                    failures.append(
+                        f"Turn {idx} returned HTTP {resp.status_code} from {chat_url}: "
+                        f"{redact_secrets(raw)}"
+                    )
+                    turn_results.append(
+                        TurnResult(
+                            turn_index=idx,
+                            request=turn,
+                            response_status=resp.status_code,
+                            latency_ms=latency,
+                        )
+                    )
+                    continue
 
                 assistant_content = None
                 aegis_meta: Dict[str, Any] = raw.get("aegis", {})
