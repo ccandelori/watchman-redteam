@@ -19,16 +19,18 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@v8.2.0
         with:
-          cache-dependency-glob: pyproject.toml
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
 
       - name: Run tests
-        run: uv run --extra dev pytest -q
+        run: uv run --locked --extra dev pytest -q
 
       - name: Run ruff
-        run: uv run --extra dev ruff check .
+        run: uv run --locked --extra dev ruff check .
 
       - name: Run mypy
-        run: uv run --extra dev mypy src tests
+        run: uv run --locked --extra dev mypy src tests
 
       - name: Build package
         run: uv build

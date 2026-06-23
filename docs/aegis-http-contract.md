@@ -134,8 +134,8 @@ Returns recent audit events for analysis. This endpoint is optional for the redt
 
 A live encoded-leakage E2E run requires a running Aegis HTTP server exposing `/health`, `/test/reset`, and `/v1/chat/completions`. The deterministic fixture server in this repository is only a redteam-owned smoke target for validating the runner path.
 
-Expected live smoke command:
+Expected live smoke command from a source checkout:
 
 ```bash
-uv run --extra dev aegis-redteam run scenarios/ --target http://localhost:8000 --output results/latest.jsonl
+uv run --locked --extra dev aegis-redteam run scenarios/ --target http://localhost:8000 --output results/latest.jsonl
 ```

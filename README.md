@@ -24,8 +24,8 @@ See the upstream `uv` installation docs for platform-specific alternatives: <htt
 Against a running Aegis-compatible HTTP target from a source checkout:
 
 ```bash
-uv sync --python 3.11 --extra dev
-uv run --extra dev aegis-redteam run scenarios/ --target http://localhost:8000 --output results/latest.jsonl
+uv sync --python 3.11 --locked --extra dev
+uv run --locked --extra dev aegis-redteam run scenarios/ --target http://localhost:8000 --output results/latest.jsonl
 ```
 
 The `scenarios/` directory is part of the source checkout. Installed wheels provide the CLI and Python package, but do not currently install the top-level example scenarios.
@@ -58,13 +58,13 @@ Detector entries must include `detector_name` or `name`. `HttpAegisTarget` treat
 When no Watchman/Aegis HTTP server is running, start the deterministic redteam-owned fixture target in one terminal:
 
 ```bash
-uv run --extra dev aegis-redteam serve-fixture --port 8799
+uv run --locked --extra dev aegis-redteam serve-fixture --port 8799
 ```
 
 Then run scenarios through the real HTTP target path from another terminal:
 
 ```bash
-uv run --extra dev aegis-redteam run scenarios/ --target http://127.0.0.1:8799 --output results/fixture-smoke.jsonl
+uv run --locked --extra dev aegis-redteam run scenarios/ --target http://127.0.0.1:8799 --output results/fixture-smoke.jsonl
 ```
 
 Expected fixture smoke result:
@@ -80,25 +80,25 @@ The fixture is a runner smoke target, not a substitute for Watchman/Aegis runtim
 Run one scenario with detailed per-turn output:
 
 ```bash
-uv run --extra dev aegis-redteam run-one scenarios/base64_exfil.yaml --target http://127.0.0.1:8799
+uv run --locked --extra dev aegis-redteam run-one scenarios/base64_exfil.yaml --target http://127.0.0.1:8799
 ```
 
 View a saved JSONL result as a Rich table:
 
 ```bash
-uv run --extra dev aegis-redteam view results/fixture-smoke.jsonl
+uv run --locked --extra dev aegis-redteam view results/fixture-smoke.jsonl
 ```
 
 Generate a Markdown report:
 
 ```bash
-uv run --extra dev aegis-redteam report results/fixture-smoke.jsonl results/fixture-smoke.md
+uv run --locked --extra dev aegis-redteam report results/fixture-smoke.jsonl results/fixture-smoke.md
 ```
 
 Compare a current run against a baseline. The command exits nonzero when regressions are detected.
 
 ```bash
-uv run --extra dev aegis-redteam compare results/fixture-smoke.jsonl results/fixture-smoke.jsonl
+uv run --locked --extra dev aegis-redteam compare results/fixture-smoke.jsonl results/fixture-smoke.jsonl
 ```
 
 Expected self-compare summary:
@@ -124,14 +124,16 @@ Installed wheels do not include the source-checkout `scenarios/` directory. Run 
 ## Development Gates
 
 ```bash
-uv run --extra dev pytest -q
-uv run --extra dev ruff check .
-uv run --extra dev mypy src tests
+uv run --locked --extra dev pytest -q
+uv run --locked --extra dev ruff check .
+uv run --locked --extra dev mypy src tests
 ```
+
+The repository commits `uv.lock` for source-checkout and CI reproducibility. To intentionally refresh dependencies, run `uv lock --upgrade`, then rerun the locked development gates before committing the lockfile update.
 
 ## Scenarios
 
-Scenarios are defined in YAML. See `scenarios/` for examples.
+Scenarios are defined in YAML. In a source checkout, see `scenarios/` for examples.
 
 Scenario `target_controls` are translated into HTTP request `metadata`, including `session_id`, `turn_index`, and optional `mock_response_mode`.
 
@@ -153,5 +155,5 @@ A live encoded-leakage E2E run requires a running Watchman/Aegis HTTP server at 
 Once a real Watchman/Aegis server is available, run:
 
 ```bash
-uv run --extra dev aegis-redteam run scenarios/ --target http://localhost:8000 --output results/latest.jsonl
+uv run --locked --extra dev aegis-redteam run scenarios/ --target http://localhost:8000 --output results/latest.jsonl
 ```
