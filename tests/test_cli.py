@@ -73,6 +73,36 @@ def test_cli_exposes_configured_entrypoint() -> None:
     assert callable(main)
 
 
+def test_tui_command_launches_result_browser(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from aegis_redteam import cli
+
+    results_path = tmp_path / "results.jsonl"
+    launched_paths: list[Path] = []
+
+    def fake_launch_tui(results_file: Path) -> None:
+        launched_paths.append(results_file)
+
+    monkeypatch.setattr(cli, "launch_tui", fake_launch_tui)
+
+    result = CliRunner().invoke(cli.app, ["tui", str(results_path)])
+
+    assert result.exit_code == 0
+    assert launched_paths == [results_path]
+
+
+def test_tui_command_reports_invalid_result_file_without_traceback(tmp_path: Path) -> None:
+    from aegis_redteam import cli
+
+    results_path = tmp_path / "bad.jsonl"
+    results_path.write_text("not json\n", encoding="utf-8")
+
+    result = CliRunner().invoke(cli.app, ["tui", str(results_path)])
+
+    assert result.exit_code == 1
+    assert "bad.jsonl:1: invalid JSON" in result.output
+    assert "Traceback" not in result.output
+
+
 def test_write_results_jsonl_redacts_secrets(tmp_path: Path) -> None:
     from aegis_redteam.results import write_results_jsonl
 

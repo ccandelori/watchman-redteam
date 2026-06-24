@@ -21,6 +21,7 @@ from aegis_redteam.campaigns.baseline import CampaignBaselinePromotion, promote_
 from aegis_redteam.campaigns.compare import CampaignComparison, compare_campaign_results
 from aegis_redteam.campaigns.runner import CampaignRun, run_campaign
 from aegis_redteam.results import load_results_jsonl, write_results_jsonl
+from aegis_redteam.tui.app import launch_tui
 
 app = typer.Typer(help="Aegis Redteam Runner")
 campaign_app = typer.Typer(help="Campaign commands")
@@ -298,6 +299,20 @@ def view(results_file: Path) -> None:
         table.add_row(result.scenario_name, status, policy)
 
     console.print(table)
+
+
+@app.command("tui")
+def tui(results_file: Path = typer.Argument(..., help="Saved RedteamResult JSONL file")) -> None:
+    """Open an interactive Textual browser for saved JSONL results."""
+    try:
+        launch_tui(results_file)
+    except FileNotFoundError as exc:
+        missing_path = Path(str(exc.filename)) if exc.filename is not None else results_file
+        console.print(f"[red]File not found: {missing_path}[/red]", soft_wrap=True)
+        raise typer.Exit(1) from exc
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]", soft_wrap=True)
+        raise typer.Exit(1) from exc
 
 
 @app.command()
