@@ -230,3 +230,39 @@ uv run --locked --extra dev aegis-redteam campaign baseline promote \
 Use `campaign compare` (without `--strict` by default) to detect regressions while tolerating minor drift in live environments.
 
 Fixture baselines (the committed `credential-exfil-v1.jsonl`) remain strict and deterministic for CI.
+
+## Live Campaign Workflow Example
+
+1. Define or use a live-oriented campaign (supports `seed_canary` + `expected.egress`):
+
+```bash
+cat campaigns/credential_exfil_live.yaml
+```
+
+2. Run against fixture (for development) or live target:
+
+```bash
+uv run --locked --extra dev aegis-redteam campaign run \
+  campaigns/credential_exfil_live.yaml \
+  --target http://127.0.0.1:8799 \
+  --output results/live-campaign.jsonl \
+  --generated-dir generated/live-campaign
+```
+
+3. Explore with TUI (now shows Campaign column for generated results):
+
+```bash
+uv run --locked --extra dev aegis-redteam tui results/live-campaign.jsonl
+```
+
+4. Promote to baseline (use without --strict for live):
+
+```bash
+uv run --locked --extra dev aegis-redteam campaign baseline promote \
+  results/live-campaign.jsonl baselines/live-credential-exfil-v1.jsonl --force
+
+uv run --locked --extra dev aegis-redteam campaign compare \
+  results/live-campaign.jsonl baselines/live-credential-exfil-v1.jsonl
+```
+
+See `test_campaigns.py` for the E2E test that runs the live campaign against the fixture and verifies egress assertions.

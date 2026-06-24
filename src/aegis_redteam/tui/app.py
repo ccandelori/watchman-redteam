@@ -43,6 +43,14 @@ def final_policy(result: RedteamResult) -> str:
     return "-"
 
 
+
+def campaign_prefix(result: RedteamResult) -> str:
+    """Extract campaign name from scenario_name if it follows campaign__variant pattern."""
+    name = result.scenario_name
+    if "__" in name:
+        return name.split("__", 1)[0]
+    return "-"
+
 def failure_count_label(result: RedteamResult) -> str:
     if len(result.failures) == 0:
         return "-"
@@ -134,11 +142,12 @@ class RedteamTUI(App[None]):
         table = self.query_one("#results", DataTable)
         table.cursor_type = "row"
         table.zebra_stripes = True
-        table.add_columns("Scenario", "Status", "Policy", "Detectors", "Failures")
+        table.add_columns("Campaign", "Scenario", "Status", "Policy", "Detectors", "Failures")
 
         for index, result in enumerate(self.results):
             status = "PASS" if result.passed else "FAIL"
             table.add_row(
+                campaign_prefix(result),
                 result.scenario_name,
                 status,
                 final_policy(result),
