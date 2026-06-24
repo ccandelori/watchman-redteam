@@ -432,7 +432,7 @@ def test_campaign_run_command_requires_output_and_generated_dir(
         return CampaignRun(
             campaign=Campaign.model_construct(
                 name="credential_exfil_v1",
-                credential="{{CREDENTIAL:api_key:sk_live_1234}}",
+                credential="{{CREDENTIAL:api_key:openai_key}}",
                 reset_before_run=True,
                 variants=[],
             ),
@@ -442,7 +442,7 @@ def test_campaign_run_command_requires_output_and_generated_dir(
 
     monkeypatch.setattr(cli, "run_campaign", fake_run_campaign)
 
-    missing_output = CliRunner().invoke(cli.app, ["campaign", "run", str(campaign_path)])
+    missing_output = CliRunner().invoke(cli.app, ["campaign", "run", str(campaign_path)], terminal_width=500)
     missing_generated_dir = CliRunner().invoke(
         cli.app,
         [
@@ -452,6 +452,7 @@ def test_campaign_run_command_requires_output_and_generated_dir(
             "--output",
             str(tmp_path / "campaign.jsonl"),
         ],
+        terminal_width=500,
     )
 
     assert missing_output.exit_code != 0
@@ -794,6 +795,7 @@ def test_campaign_baseline_promote_command_reports_written_baseline(
     result = CliRunner().invoke(
         cli.app,
         ["campaign", "baseline", "promote", str(source_path), str(baseline_path)],
+        terminal_width=500,
     )
 
     assert result.exit_code == 0
