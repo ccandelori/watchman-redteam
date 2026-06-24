@@ -217,3 +217,16 @@ Once a real Watchman/Aegis server is available, run:
 ```bash
 uv run --locked --extra dev aegis-redteam run scenarios/ --target http://localhost:8000 --output results/latest.jsonl
 ```
+
+## Live Campaign Baselines (Guidance)
+
+When promoting results from live targets, the baseline promotion still works but the results contain more real-world variance:
+
+```bash
+uv run --locked --extra dev aegis-redteam campaign baseline promote \
+  results/live-campaign.jsonl baselines/live-credential-exfil-v1.jsonl --force
+```
+
+Use `campaign compare` (without `--strict` by default) to detect regressions while tolerating minor drift in live environments.
+
+Fixture baselines (the committed `credential-exfil-v1.jsonl`) remain strict and deterministic for CI.
