@@ -34,7 +34,7 @@ def load_results_for_cli(results_file: Path) -> list[RedteamResult]:
     try:
         return load_results_jsonl(results_file)
     except ValueError as exc:
-        console.print(f"[red]{exc}[/red]")
+        console.print(f"[red]{exc}[/red]", soft_wrap=True)
         raise typer.Exit(1) from exc
 
 
@@ -136,7 +136,7 @@ def campaign_baseline_promote(
     try:
         promotion = promote_campaign_baseline(source_file, baseline_file, force)
     except (FileExistsError, ValueError) as exc:
-        console.print(f"[red]{exc}[/red]")
+        console.print(f"[red]{exc}[/red]", soft_wrap=True)
         raise typer.Exit(1) from exc
     print_campaign_baseline_promotion(promotion)
 
@@ -155,7 +155,7 @@ def campaign_compare(
     try:
         comparison = compare_campaign_results(current_file, baseline_file)
     except ValueError as exc:
-        console.print(f"[red]{exc}[/red]")
+        console.print(f"[red]{exc}[/red]", soft_wrap=True)
         raise typer.Exit(1) from exc
     print_campaign_comparison(comparison)
     if comparison.regressions > 0:

@@ -148,7 +148,7 @@ Scenarios are defined in YAML. In a source checkout, see `scenarios/` for exampl
 
 Scenario `target_controls` are translated into HTTP request `metadata`, including `session_id`, `turn_index`, and optional `mock_response_mode`. When `target_controls.seed_canary` is present, the runner first calls `/test/seed-canary` with the scenario session and requested canary slot/type.
 
-Campaigns generate deterministic scenario variants and then reuse the same runner/evaluator path. In a source checkout, see `campaigns/credential_exfil.yaml` for the first v1 campaign.
+Campaigns generate deterministic scenario variants and then reuse the same runner/evaluator path. In a source checkout, see `campaigns/credential_exfil.yaml` for the first v1 campaign. Campaign and variant names must be filesystem-safe slugs matching `^[A-Za-z0-9][A-Za-z0-9_-]*$` because generated scenario files are named from those identifiers.
 
 ```bash
 uv run --locked --extra dev aegis-redteam campaign run campaigns/credential_exfil.yaml --target http://127.0.0.1:8799 --output results/campaign-v1.jsonl --generated-dir generated/campaign-v1
