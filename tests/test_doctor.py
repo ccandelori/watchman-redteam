@@ -6,6 +6,12 @@ from httpx import Request, Response
 from aegis_redteam.doctor import run_doctor
 
 
+def mock_seed_canary(base_url: str) -> None:
+    respx.post(f"{base_url}/test/seed-canary").mock(
+        return_value=Response(200, json={"status": "seeded"})
+    )
+
+
 def test_doctor_passes_fixture_contract() -> None:
     base_url = "http://fixture.local"
 
@@ -16,6 +22,7 @@ def test_doctor_passes_fixture_contract() -> None:
         respx.post(f"{base_url}/test/reset").mock(
             return_value=Response(200, json={"status": "reset"})
         )
+        mock_seed_canary(base_url)
         respx.post(f"{base_url}/v1/chat/completions").mock(
             return_value=Response(
                 200,
@@ -39,9 +46,78 @@ def test_doctor_passes_fixture_contract() -> None:
     assert [(check.name, check.passed) for check in report.checks] == [
         ("health", True),
         ("reset", True),
+        ("seed_canary", True),
         ("chat", True),
         ("aegis_metadata", True),
     ]
+
+
+def test_doctor_seed_canary_probe_payload() -> None:
+    base_url = "http://target.local"
+    captured_payloads: list[dict[str, object]] = []
+
+    def seed_response(request: Request) -> Response:
+        captured_payloads.append(json.loads(request.content.decode("utf-8")))
+        return Response(200, json={"status": "seeded"})
+
+    with respx.mock:
+        respx.get(f"{base_url}/health").mock(return_value=Response(200, json={"status": "ok"}))
+        respx.post(f"{base_url}/test/reset").mock(return_value=Response(200, json={"status": "reset"}))
+        respx.post(f"{base_url}/test/seed-canary").mock(side_effect=seed_response)
+        respx.post(f"{base_url}/v1/chat/completions").mock(
+            return_value=Response(
+                200,
+                json={
+                    "choices": [{"message": {"content": "ok"}}],
+                    "aegis": {
+                        "detector_results": [],
+                        "policy_decision": {"final_action": "allow", "triggered_detectors": []},
+                    },
+                },
+            )
+        )
+
+        report = run_doctor(base_url, 5.0)
+
+    assert report.passed is True
+    assert captured_payloads == [
+        {
+            "session_id": "doctor-probe",
+            "slot_name": "api_key",
+            "credential_type": "openai_key",
+            "turn_index": 0,
+        }
+    ]
+
+
+def test_doctor_fails_seed_canary_http_error() -> None:
+    base_url = "http://target.local"
+
+    with respx.mock:
+        respx.get(f"{base_url}/health").mock(return_value=Response(200, json={"status": "ok"}))
+        respx.post(f"{base_url}/test/reset").mock(return_value=Response(200, json={"status": "reset"}))
+        respx.post(f"{base_url}/test/seed-canary").mock(
+            return_value=Response(503, json={"error": "seed unavailable"})
+        )
+        respx.post(f"{base_url}/v1/chat/completions").mock(
+            return_value=Response(
+                200,
+                json={
+                    "choices": [{"message": {"content": "ok"}}],
+                    "aegis": {
+                        "detector_results": [],
+                        "policy_decision": {"final_action": "allow", "triggered_detectors": []},
+                    },
+                },
+            )
+        )
+
+        report = run_doctor(base_url, 5.0)
+
+    assert report.passed is False
+    failed_checks = [check for check in report.checks if not check.passed]
+    assert [(check.name, check.required) for check in failed_checks] == [("seed_canary", True)]
+    assert "Seed canary returned HTTP 503" in failed_checks[0].detail
 
 
 def test_doctor_fails_missing_aegis_metadata() -> None:
@@ -50,6 +126,7 @@ def test_doctor_fails_missing_aegis_metadata() -> None:
     with respx.mock:
         respx.get(f"{base_url}/health").mock(return_value=Response(200, json={"status": "ok"}))
         respx.post(f"{base_url}/test/reset").mock(return_value=Response(200, json={"status": "reset"}))
+        mock_seed_canary(base_url)
         respx.post(f"{base_url}/v1/chat/completions").mock(
             return_value=Response(200, json={"choices": [{"message": {"content": "ok"}}]})
         )
@@ -69,6 +146,7 @@ def test_doctor_redacts_failure_details() -> None:
     with respx.mock:
         respx.get(f"{base_url}/health").mock(return_value=Response(500, json={"error": token}))
         respx.post(f"{base_url}/test/reset").mock(return_value=Response(200, json={"status": "reset"}))
+        mock_seed_canary(base_url)
         respx.post(f"{base_url}/v1/chat/completions").mock(
             return_value=Response(
                 200,
@@ -88,7 +166,6 @@ def test_doctor_redacts_failure_details() -> None:
     assert report.passed is False
     assert token not in report_text
     assert "[REDACTED]" in report_text
-
 
 
 def test_doctor_chat_probe_omits_fixture_only_mock_response_mode() -> None:
@@ -111,6 +188,7 @@ def test_doctor_chat_probe_omits_fixture_only_mock_response_mode() -> None:
     with respx.mock:
         respx.get(f"{base_url}/health").mock(return_value=Response(200, json={"status": "ok"}))
         respx.post(f"{base_url}/test/reset").mock(return_value=Response(200, json={"status": "reset"}))
+        mock_seed_canary(base_url)
         respx.post(f"{base_url}/v1/chat/completions").mock(side_effect=chat_response)
 
         report = run_doctor(base_url, 5.0)
@@ -125,6 +203,7 @@ def test_doctor_fails_malformed_choices_like_http_target_parser() -> None:
     with respx.mock:
         respx.get(f"{base_url}/health").mock(return_value=Response(200, json={"status": "ok"}))
         respx.post(f"{base_url}/test/reset").mock(return_value=Response(200, json={"status": "reset"}))
+        mock_seed_canary(base_url)
         respx.post(f"{base_url}/v1/chat/completions").mock(
             return_value=Response(
                 200,
@@ -153,6 +232,7 @@ def test_doctor_classifies_live_and_unknown_compatible_targets() -> None:
     def register_successful_target(base_url: str, health_body: dict[str, object]) -> None:
         respx.get(f"{base_url}/health").mock(return_value=Response(200, json=health_body))
         respx.post(f"{base_url}/test/reset").mock(return_value=Response(200, json={"status": "reset"}))
+        mock_seed_canary(base_url)
         respx.post(f"{base_url}/v1/chat/completions").mock(
             return_value=Response(
                 200,

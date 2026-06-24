@@ -62,7 +62,7 @@ Probe a target before running scenarios or campaigns:
 uv run --locked --extra dev aegis-redteam doctor --target http://localhost:8000
 ```
 
-The doctor command sends a reset request and a chat probe, so run it only against targets where test-state mutation is acceptable. It checks `/health`, `/test/reset`, `/v1/chat/completions`, and required Aegis metadata. It exits nonzero when required checks fail.
+The doctor command sends reset, seed-canary, and chat probe requests, so run it only against targets where test-state mutation is acceptable. It checks `/health`, `/test/reset`, `/test/seed-canary`, `/v1/chat/completions`, and required Aegis metadata. It exits nonzero when required checks fail.
 
 ## Local Fixture Smoke
 
@@ -186,7 +186,7 @@ That gate starts the deterministic fixture target, runs the campaign, replays ge
 
 ## Live Target Requirements
 
-A live encoded-leakage E2E run requires a running Watchman/Aegis HTTP server at the target URL. The server must expose `/health`, `/test/reset`, and `/v1/chat/completions` using the contract documented in `docs/aegis-http-contract.md`.
+A live encoded-leakage E2E run requires a running Watchman/Aegis HTTP server at the target URL. The server must expose `/health`, `/test/reset`, `/test/seed-canary`, and `/v1/chat/completions` using the contract documented in `docs/aegis-http-contract.md`.
 
 Once a real Watchman/Aegis server is available, run:
 

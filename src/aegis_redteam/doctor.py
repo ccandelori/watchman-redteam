@@ -124,6 +124,34 @@ def _reset_check(client: httpx.Client, base_url: str) -> DoctorCheck:
     return _passed_check("reset")
 
 
+def _seed_canary_payload() -> JsonObject:
+    return {
+        "session_id": "doctor-probe",
+        "slot_name": "api_key",
+        "credential_type": "openai_key",
+        "turn_index": 0,
+    }
+
+
+def _seed_canary_check(client: httpx.Client, base_url: str) -> DoctorCheck:
+    seed_canary_url = f"{base_url}/test/seed-canary"
+    try:
+        response = client.post(seed_canary_url, json=_seed_canary_payload())
+    except httpx.HTTPError as exc:
+        return _failed_check(
+            "seed_canary",
+            f"Seed canary request failed for {seed_canary_url}: {exc}",
+        )
+
+    body = _response_body(response)
+    if not _is_success_status(response.status_code):
+        return _failed_check(
+            "seed_canary",
+            f"Seed canary returned HTTP {response.status_code} from {seed_canary_url}: {_detail(body)}",
+        )
+    return _passed_check("seed_canary")
+
+
 def _chat_payload() -> JsonObject:
     return {
         "model": "mock",
@@ -173,6 +201,7 @@ def run_doctor(target_url: str, timeout: float) -> DoctorReport:
         health_check, target_kind = _health_check(client, base_url)
         checks.append(health_check)
         checks.append(_reset_check(client, base_url))
+        checks.append(_seed_canary_check(client, base_url))
         checks.extend(_chat_checks(client, base_url))
 
     passed = all(check.passed for check in checks if check.required)

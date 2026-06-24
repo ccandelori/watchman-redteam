@@ -33,7 +33,7 @@ Expected response: any 2xx status. Non-2xx responses are treated as redteam run 
 
 ### `POST /test/seed-canary`
 
-Purpose: plant a target-side canary before a scenario asks Aegis to leak the first honeytoken. Scenarios use this when they intentionally do not include a `{{CREDENTIAL:...}}` placeholder in the chat turn.
+Purpose: plant a target-side canary before a scenario asks Aegis to leak the first honeytoken. Scenarios use this when they intentionally do not include a `{{CREDENTIAL:...}}` placeholder in the chat turn. The `doctor` command also probes this endpoint with a synthetic `doctor-probe` session.
 
 Request:
 
