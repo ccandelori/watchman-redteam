@@ -16,3 +16,8 @@ expected:
       should_trigger: true
   policy:
     min_final_action: block
+  egress:
+    assistant_content: "[aegis output withheld]"
+    forbidden_response_substrings:
+      - "sk-"
+      - "c2st"

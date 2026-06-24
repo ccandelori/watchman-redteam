@@ -34,6 +34,7 @@ The target must expose:
 
 - `GET /health`
 - `POST /test/reset` when scenarios use `target_controls.reset_before_run: true`
+- `POST /test/seed-canary` when scenarios use `target_controls.seed_canary`
 - `POST /v1/chat/completions` with OpenAI-compatible response data plus required top-level `aegis` metadata
 
 Minimal valid no-detector response:
@@ -52,6 +53,16 @@ Minimal valid no-detector response:
 ```
 
 Detector entries must include `detector_name` or `name`. `HttpAegisTarget` treats every non-2xx reset/chat response as a target failure.
+
+## Target Doctor
+
+Probe a target before running scenarios or campaigns:
+
+```bash
+uv run --locked --extra dev aegis-redteam doctor --target http://localhost:8000
+```
+
+The doctor command sends reset, seed-canary, and chat probe requests, so run it only against targets where test-state mutation is acceptable. It checks `/health`, `/test/reset`, `/test/seed-canary`, `/v1/chat/completions`, and required Aegis metadata. It exits nonzero when required checks fail.
 
 ## Local Fixture Smoke
 
@@ -95,7 +106,7 @@ Generate a Markdown report:
 uv run --locked --extra dev aegis-redteam report results/fixture-smoke.jsonl results/fixture-smoke.md
 ```
 
-Compare a current run against a baseline. The command exits nonzero when regressions are detected.
+Compare a current run against a baseline. By default, the command exits nonzero when regressions are detected. Add `--strict` when a CI gate should require an exact baseline match and also fail on improvements, new scenarios, missing baseline scenarios, or stable detector/policy/failure drift.
 
 ```bash
 uv run --locked --extra dev aegis-redteam compare results/fixture-smoke.jsonl results/fixture-smoke.jsonl
@@ -131,11 +142,43 @@ uv run --locked --extra dev mypy src tests
 
 The repository commits `uv.lock` for source-checkout and CI reproducibility. To intentionally refresh dependencies, run `uv lock --upgrade`, then rerun the locked development gates before committing the lockfile update.
 
-## Scenarios
+## Scenarios and Campaigns
 
 Scenarios are defined in YAML. In a source checkout, see `scenarios/` for examples.
 
-Scenario `target_controls` are translated into HTTP request `metadata`, including `session_id`, `turn_index`, and optional `mock_response_mode`.
+Scenario `target_controls` are translated into HTTP request `metadata`, including `session_id`, `turn_index`, and optional `mock_response_mode`. When `target_controls.seed_canary` is present, the runner first calls `/test/seed-canary` with the scenario session and requested canary slot/type.
+
+Scenario `expected.egress` asserts the target's public egress surfaces before result redaction:
+
+- `assistant_content` pins the expected returned assistant text, such as `[aegis output withheld]` for `block`/`escalate` policy interventions.
+- `forbidden_response_substrings` are searched in the raw chat response body before persistence redaction.
+- `inspect_audit: true` makes the runner query `/audit/recent?session_id=<scenario session>&limit=20` after the chat turn.
+- `forbidden_audit_substrings` are searched in that raw audit response before persistence redaction.
+
+Seeded Watchman scenarios should use `/test/reset`, `/test/seed-canary`, and these egress checks to assert that direct, encoded, and partial canary leaks are blocked without returning raw or encoded canary material in `choices` or audit projection. The current Watchman HTTP chat parser does not accept top-level synthetic `tool_calls`, so tool-call handoff scenarios exercise the public prompt/model-output path until Watchman exposes a dedicated tool-call request contract.
+
+Campaigns generate deterministic scenario variants and then reuse the same runner/evaluator path. In a source checkout, see `campaigns/credential_exfil.yaml` for the first v1 campaign. Campaign and variant names must be filesystem-safe slugs matching `^[A-Za-z0-9][A-Za-z0-9_-]*$` because generated scenario files are named from those identifiers.
+
+```bash
+uv run --locked --extra dev aegis-redteam campaign run campaigns/credential_exfil.yaml --target http://127.0.0.1:8799 --output results/campaign-v1.jsonl --generated-dir generated/campaign-v1
+```
+
+Generated scenario YAML is explicit and replayable with the normal `run` command. Campaign result JSONL stays in the normal `RedteamResult` format, so it can be promoted to a baseline and compared later:
+
+```bash
+uv run --locked --extra dev aegis-redteam campaign baseline promote results/campaign-v1.jsonl baselines/credential-exfil-v1.jsonl
+uv run --locked --extra dev aegis-redteam campaign compare results/campaign-v1.jsonl baselines/credential-exfil-v1.jsonl
+```
+
+Baseline promotion validates the source JSONL, creates parent directories, canonicalizes volatile top-level and nested runtime fields for committed baselines, strips raw responses, preserves detector/policy summaries, and refuses to overwrite an existing baseline unless `--force` is passed. Campaign compare rejects duplicate scenario names and exits nonzero when regressions are detected; add `--strict` to fail on any baseline difference, including improvements, new scenarios, missing baseline scenarios, or stable detector/policy/failure drift.
+
+The committed credential-exfil campaign baseline lives at `baselines/credential-exfil-v1.jsonl`. CI enforces it with:
+
+```bash
+uv run --locked --extra dev pytest tests/test_campaign_regression_gate.py -q
+```
+
+That gate starts the deterministic fixture target, runs the campaign, replays generated YAML through the normal scenario runner, and compares both the campaign JSONL and replay JSONL against the committed baseline.
 
 ## Architecture
 
@@ -145,12 +188,14 @@ Scenario `target_controls` are translated into HTTP request `metadata`, includin
 - JSONL result output with credential-like string redaction
 - Baseline comparison that exits nonzero on regressions
 - Deterministic fixture HTTP target for redteam-side smoke tests
+- Target doctor for public-contract readiness checks
+- Deterministic campaign generation that emits replayable scenario YAML
 - Rich table viewer for saved JSONL results
 - Textual TUI components available for future interactive result browsing
 
 ## Live Target Requirements
 
-A live encoded-leakage E2E run requires a running Watchman/Aegis HTTP server at the target URL. The server must expose `/health`, `/test/reset`, and `/v1/chat/completions` using the contract documented in `docs/aegis-http-contract.md`.
+A live encoded-leakage E2E run requires a running Watchman/Aegis HTTP server at the target URL. The server must expose `/health`, `/test/reset`, `/test/seed-canary`, and `/v1/chat/completions` using the contract documented in `docs/aegis-http-contract.md`.
 
 Once a real Watchman/Aegis server is available, run:
 
