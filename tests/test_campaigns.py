@@ -9,6 +9,8 @@ from aegis_redteam.campaigns.models import Campaign, CampaignDetectorExpectation
 from aegis_redteam.campaigns.runner import run_campaign
 from aegis_redteam.models import RedteamResult, Scenario, Turn, CanarySeed, EgressExpectation, Expected
 from aegis_redteam.scenarios.loader import load_scenarios
+from threading import Thread
+from aegis_redteam.fixture_server import FixtureState, create_fixture_server
 
 
 def make_campaign() -> Campaign:
@@ -432,3 +434,39 @@ def test_generate_campaign_scenarios_falls_back_to_flat_fields() -> None:
     assert any(d.name == "encoded_canary" for d in s.expected.detectors)
     assert s.expected.policy is not None
     assert s.expected.policy.min_final_action == "block"
+
+
+
+def test_live_campaign_runs_against_fixture_and_enforces_egress(tmp_path: Path) -> None:
+    """End-to-end: run the live campaign against fixture and verify egress expectations are evaluated."""
+    repo_root = Path(__file__).resolve().parents[1]
+    campaign_path = repo_root / "campaigns" / "credential_exfil_live.yaml"
+    generated_dir = tmp_path / "generated"
+
+    state = FixtureState()
+    server = create_fixture_server("127.0.0.1", 0, state)
+    port = server.server_port
+    server_thread = Thread(target=server.serve_forever, daemon=True)
+    server_thread.start()
+
+    try:
+        target_url = f"http://127.0.0.1:{port}"
+        campaign_run = run_campaign(campaign_path, target_url, generated_dir)
+    finally:
+        server.shutdown()
+        server.server_close()
+        server_thread.join(timeout=5)
+
+    assert len(campaign_run.generated_paths) == 5
+    assert len(campaign_run.results) == 5
+
+    # The live YAML is written so that the fixture responses should satisfy the egress expectations
+    # (assistant_content = "[aegis output withheld]" for blocking variants, no forbidden leaks)
+    for result in campaign_run.results:
+        # All should pass under the current fixture behavior + the expectations we declared
+        assert result.passed, f"Unexpected failure in live campaign variant: {result.scenario_name}: {result.failures}"
+        assert not result.failures, f"Failures present for passing variant: {result.scenario_name}"
+
+    # Spot-check that seed_canary and egress expectations were present in the generated scenarios
+    # (they are exercised because the runner reached the egress checks)
+    assert any("seed_canary" in str(g.read_text()) or "egress" in str(g.read_text()) for g in campaign_run.generated_paths)
