@@ -6,6 +6,7 @@ from textual.app import App, ComposeResult
 from textual.widgets import Header, Footer, DataTable, Static
 
 from aegis_redteam.models import RedteamResult
+from aegis_redteam.results import load_results_jsonl
 
 
 class RedteamTUI(App[None]):
@@ -41,13 +42,7 @@ class RedteamTUI(App[None]):
 
 def load_results(path: Path) -> list[RedteamResult]:
     """Load RedteamResult objects from a JSONL file."""
-    import json
-    results: list[RedteamResult] = []
-    with path.open() as f:
-        for line in f:
-            data = json.loads(line)
-            results.append(RedteamResult.model_validate(data))
-    return results
+    return load_results_jsonl(path)
 
 
 if __name__ == "__main__":
