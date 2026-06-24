@@ -27,6 +27,17 @@ console = Console()
 
 
 
+def load_results_for_cli(results_file: Path) -> list[RedteamResult]:
+    if not results_file.exists():
+        console.print(f"[red]File not found: {results_file}[/red]")
+        raise typer.Exit(1)
+    try:
+        return load_results_jsonl(results_file)
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+
+
 def print_failure_details(results: Sequence[RedteamResult]) -> None:
     failed_results = [result for result in results if len(result.failures) > 0]
     if len(failed_results) == 0:
@@ -141,7 +152,11 @@ def campaign_compare(
     ),
 ) -> None:
     """Compare campaign result JSONL against a baseline."""
-    comparison = compare_campaign_results(current_file, baseline_file)
+    try:
+        comparison = compare_campaign_results(current_file, baseline_file)
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
     print_campaign_comparison(comparison)
     if comparison.regressions > 0:
         console.print(
@@ -238,27 +253,22 @@ def run_one(
 @app.command()
 def view(results_file: Path) -> None:
     """View previously saved JSONL results."""
-    if not results_file.exists():
-        console.print(f"[red]File not found: {results_file}[/red]")
-        raise typer.Exit(1)
+    results = load_results_for_cli(results_file)
 
     table = Table(title=f"Results from {results_file.name}")
     table.add_column("Scenario")
     table.add_column("Passed")
     table.add_column("Policy")
 
-    import json
-    with results_file.open() as f:
-        for line in f:
-            data = json.loads(line)
-            status = "PASS" if data.get("passed") else "FAIL"
-            policy = "-"
-            if data.get("turn_results"):
-                last = data["turn_results"][-1]
-                if last.get("policy_decision"):
-                    policy = last["policy_decision"].get("final_action", "-")
+    for result in results:
+        status = "PASS" if result.passed else "FAIL"
+        policy = "-"
+        if len(result.turn_results) > 0:
+            last_turn = result.turn_results[-1]
+            if last_turn.policy_decision is not None:
+                policy = last_turn.policy_decision.final_action
 
-            table.add_row(data["scenario_name"], status, policy)
+        table.add_row(result.scenario_name, status, policy)
 
     console.print(table)
 
@@ -266,14 +276,7 @@ def view(results_file: Path) -> None:
 @app.command()
 def report(results_file: Path, output: Path = typer.Argument(..., help="Output Markdown file")) -> None:
     """Generate a Markdown report from a JSONL results file."""
-    import json
-
-    results = []
-    with results_file.open() as f:
-        for line in f:
-            data = json.loads(line)
-            results.append(RedteamResult.model_validate(data))
-
+    results = load_results_for_cli(results_file)
     generate_markdown_report(results, output)
     console.print(f"Report written to {output}")
 
@@ -289,8 +292,8 @@ def compare(
     ),
 ) -> None:
     """Compare current results against a baseline. Exits with code 1 on regressions."""
-    current = load_results_jsonl(current_file)
-    baseline = load_results_jsonl(baseline_file)
+    current = load_results_for_cli(current_file)
+    baseline = load_results_for_cli(baseline_file)
 
     regressions, improvements, new_scenarios = compare_results(current, baseline)
 
