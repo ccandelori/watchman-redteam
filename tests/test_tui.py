@@ -9,7 +9,7 @@ from textual.widgets import DataTable, Static
 
 from aegis_redteam.models import DetectorResult, PolicyDecision, RedteamResult, Turn, TurnResult
 from aegis_redteam.results import write_results_jsonl
-from aegis_redteam.tui.app import RedteamTUI, load_results
+from aegis_redteam.tui.app import RedteamTUI, format_result_detail, format_summary, load_results
 
 
 def make_tui_result(
@@ -99,6 +99,40 @@ def test_redteam_tui_updates_details_for_selected_result() -> None:
             assert "expected detector did not fire" not in widget_text(details)
 
     asyncio.run(run_app())
+
+
+def test_tui_detail_and_summary_redact_sensitive_dynamic_fields() -> None:
+    secret = "sk" + "_live_" + "A" * 24
+    result = RedteamResult(
+        run_id=f"run-{secret}",
+        scenario_name=f"scenario-{secret}",
+        target_url=f"http://localhost:8000?api_key={secret}",
+        started_at="2026-06-23T00:00:00Z",
+        finished_at="2026-06-23T00:00:01Z",
+        passed=False,
+        failures=[f"unsafe egress {secret}"],
+        turn_results=[
+            TurnResult(
+                turn_index=1,
+                request=Turn(role="user", content="hello"),
+                response_status=200,
+                assistant_content=f"assistant {secret}",
+                detector_results=[DetectorResult(name=f"nimbus-{secret}", evidence={})],
+                policy_decision=PolicyDecision(
+                    final_action=f"sanitize-{secret}",
+                    reason=f"policy reason {secret}",
+                ),
+            )
+        ],
+    )
+
+    detail = format_result_detail(result)
+    summary = format_summary([result], Path(f"results/{secret}.jsonl"))
+
+    assert secret not in detail
+    assert secret not in summary
+    assert "[REDACTED]" in detail
+    assert "[REDACTED]" in summary
 
 
 def test_tui_loads_results_written_by_shared_jsonl_writer(tmp_path: Path) -> None:

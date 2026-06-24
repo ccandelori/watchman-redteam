@@ -18,23 +18,28 @@ def load_results(path: Path) -> list[RedteamResult]:
 def format_summary(results: list[RedteamResult], source_path: Path | None) -> str:
     passed_count = sum(1 for result in results if result.passed)
     failed_count = len(results) - passed_count
-    source = str(source_path) if source_path is not None else "in-memory results"
+    source = redact_text(str(source_path)) if source_path is not None else "in-memory results"
     return f"{passed_count}/{len(results)} scenarios passed | {failed_count} failed | Source: {source}"
+
+
+def safe_text(value: str) -> str:
+    return redact_text(value)
 
 
 def detector_names(result: RedteamResult) -> list[str]:
     names: list[str] = []
     for turn_result in result.turn_results:
         for detector in turn_result.detector_results:
-            if detector.name not in names:
-                names.append(detector.name)
+            name = safe_text(detector.name)
+            if name not in names:
+                names.append(name)
     return names
 
 
 def final_policy(result: RedteamResult) -> str:
     for turn_result in reversed(result.turn_results):
         if turn_result.policy_decision is not None:
-            return turn_result.policy_decision.final_action
+            return safe_text(turn_result.policy_decision.final_action)
     return "-"
 
 
@@ -50,11 +55,11 @@ def format_turn_detail(turn_result: TurnResult) -> str:
     if turn_result.policy_decision is not None:
         policy = turn_result.policy_decision.final_action
         policy_reason = turn_result.policy_decision.reason or "-"
-    detectors = ", ".join(detector.name for detector in turn_result.detector_results) or "-"
-    assistant_content = redact_text(turn_result.assistant_content or "-")
+    detectors = ", ".join(safe_text(detector.name) for detector in turn_result.detector_results) or "-"
+    assistant_content = safe_text(turn_result.assistant_content or "-")
     return (
         f"- Turn {turn_result.turn_index}: status={turn_result.response_status}; "
-        f"policy={policy}; reason={redact_text(policy_reason)}; "
+        f"policy={safe_text(policy)}; reason={safe_text(policy_reason)}; "
         f"detectors={detectors}; assistant={assistant_content}"
     )
 
@@ -63,12 +68,12 @@ def format_result_detail(result: RedteamResult) -> str:
     status = "PASS" if result.passed else "FAIL"
     detectors = ", ".join(detector_names(result)) or "-"
     lines = [
-        f"Scenario: {result.scenario_name}",
+        f"Scenario: {safe_text(result.scenario_name)}",
         f"Status: {status}",
-        f"Target: {result.target_url}",
-        f"Run: {result.run_id}",
-        f"Started: {result.started_at}",
-        f"Finished: {result.finished_at}",
+        f"Target: {safe_text(result.target_url)}",
+        f"Run: {safe_text(result.run_id)}",
+        f"Started: {safe_text(result.started_at)}",
+        f"Finished: {safe_text(result.finished_at)}",
         f"Final policy: {final_policy(result)}",
         f"Detectors: {detectors}",
         "",
@@ -77,7 +82,7 @@ def format_result_detail(result: RedteamResult) -> str:
     if len(result.failures) == 0:
         lines.append("- none")
     else:
-        lines.extend(f"- {redact_text(failure)}" for failure in result.failures)
+        lines.extend(f"- {safe_text(failure)}" for failure in result.failures)
     lines.extend(["", "Turns:"])
     if len(result.turn_results) == 0:
         lines.append("- none")
