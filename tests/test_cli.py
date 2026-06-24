@@ -716,6 +716,24 @@ def test_campaign_compare_command_exits_nonzero_with_invalid_jsonl(tmp_path: Pat
     assert "Traceback" not in result.output
 
 
+def test_campaign_compare_command_exits_nonzero_with_missing_jsonl(tmp_path: Path) -> None:
+    from aegis_redteam import cli
+
+    current_path = tmp_path / "missing-current.jsonl"
+    baseline_path = tmp_path / "baseline.jsonl"
+    baseline_path.write_text("", encoding="utf-8")
+
+    result = CliRunner().invoke(
+        cli.app,
+        ["campaign", "compare", str(current_path), str(baseline_path)],
+    )
+
+    assert result.exit_code == 1
+    assert "File not found" in result.output
+    assert "missing-current.jsonl" in result.output
+    assert "Traceback" not in result.output
+
+
 def test_view_command_exits_nonzero_with_invalid_jsonl(tmp_path: Path) -> None:
     from aegis_redteam import cli
 

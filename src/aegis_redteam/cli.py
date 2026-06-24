@@ -164,6 +164,10 @@ def campaign_compare(
     """Compare campaign result JSONL against a baseline."""
     try:
         comparison = compare_campaign_results(current_file, baseline_file)
+    except FileNotFoundError as exc:
+        missing_path = Path(str(exc.filename)) if exc.filename is not None else current_file
+        console.print(f"[red]File not found: {missing_path}[/red]", soft_wrap=True)
+        raise typer.Exit(1) from exc
     except ValueError as exc:
         console.print(f"[red]{exc}[/red]", soft_wrap=True)
         raise typer.Exit(1) from exc
