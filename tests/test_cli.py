@@ -366,6 +366,34 @@ def test_campaign_compare_command_exits_zero_without_regressions(
     assert "New: 2" in result.output
 
 
+def test_campaign_compare_command_strict_exits_nonzero_with_new_or_improved_scenarios(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from aegis_redteam import cli
+
+    current_path = tmp_path / "current.jsonl"
+    baseline_path = tmp_path / "baseline.jsonl"
+    current_path.write_text("", encoding="utf-8")
+    baseline_path.write_text("", encoding="utf-8")
+
+    def fake_compare_campaign_results(current_arg: Path, baseline_arg: Path) -> CampaignComparison:
+        return CampaignComparison(regressions=0, improvements=1, new_scenarios=2)
+
+    monkeypatch.setattr(cli, "compare_campaign_results", fake_compare_campaign_results)
+
+    result = CliRunner().invoke(
+        cli.app,
+        ["campaign", "compare", str(current_path), str(baseline_path), "--strict"],
+    )
+
+    assert result.exit_code == 1
+    assert "Regressions: 0" in result.output
+    assert "Improvements: 1" in result.output
+    assert "New: 2" in result.output
+    assert "strict" in result.output
+
+
 def test_campaign_compare_command_exits_nonzero_with_regressions(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -392,6 +420,43 @@ def test_campaign_compare_command_exits_nonzero_with_regressions(
     assert "Regressions: 2" in result.output
     assert "regression(s)" in result.output
 
+
+def test_compare_command_exits_zero_without_strict_for_new_scenarios(tmp_path: Path) -> None:
+    from aegis_redteam import cli
+    from aegis_redteam.results import write_results_jsonl
+
+    current_path = tmp_path / "current.jsonl"
+    baseline_path = tmp_path / "baseline.jsonl"
+    passing_baseline = make_failed_result("baseline").model_copy(update={"passed": True})
+    passing_new = make_failed_result("new").model_copy(update={"passed": True})
+    write_results_jsonl([passing_baseline, passing_new], current_path)
+    write_results_jsonl([passing_baseline], baseline_path)
+
+    result = CliRunner().invoke(cli.app, ["compare", str(current_path), str(baseline_path)])
+
+    assert result.exit_code == 0
+    assert "New: 1" in result.output
+
+
+def test_compare_command_strict_exits_nonzero_with_new_scenarios(tmp_path: Path) -> None:
+    from aegis_redteam import cli
+    from aegis_redteam.results import write_results_jsonl
+
+    current_path = tmp_path / "current.jsonl"
+    baseline_path = tmp_path / "baseline.jsonl"
+    passing_baseline = make_failed_result("baseline").model_copy(update={"passed": True})
+    passing_new = make_failed_result("new").model_copy(update={"passed": True})
+    write_results_jsonl([passing_baseline, passing_new], current_path)
+    write_results_jsonl([passing_baseline], baseline_path)
+
+    result = CliRunner().invoke(
+        cli.app,
+        ["compare", str(current_path), str(baseline_path), "--strict"],
+    )
+
+    assert result.exit_code == 1
+    assert "New: 1" in result.output
+    assert "strict" in result.output
 
 
 def test_campaign_baseline_promote_command_reports_written_baseline(

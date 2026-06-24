@@ -134,6 +134,11 @@ def campaign_baseline_promote(
 def campaign_compare(
     current_file: Path = typer.Argument(..., help="Current campaign result JSONL"),
     baseline_file: Path = typer.Argument(..., help="Baseline campaign result JSONL"),
+    strict: bool = typer.Option(
+        False,
+        "--strict",
+        help="Exit nonzero on any difference, including improvements or new scenarios",
+    ),
 ) -> None:
     """Compare campaign result JSONL against a baseline."""
     comparison = compare_campaign_results(current_file, baseline_file)
@@ -141,6 +146,11 @@ def campaign_compare(
     if comparison.regressions > 0:
         console.print(
             f"\n[red]Exiting with code 1 due to {comparison.regressions} regression(s).[/red]"
+        )
+        raise typer.Exit(1)
+    if strict and (comparison.improvements > 0 or comparison.new_scenarios > 0):
+        console.print(
+            "\n[red]Exiting with code 1 because --strict requires an exact baseline match.[/red]"
         )
         raise typer.Exit(1)
 
@@ -272,20 +282,26 @@ def report(results_file: Path, output: Path = typer.Argument(..., help="Output M
 def compare(
     current_file: Path,
     baseline_file: Path,
+    strict: bool = typer.Option(
+        False,
+        "--strict",
+        help="Exit nonzero on any difference, including improvements or new scenarios",
+    ),
 ) -> None:
     """Compare current results against a baseline. Exits with code 1 on regressions."""
-    import sys
-
     current = load_results_jsonl(current_file)
     baseline = load_results_jsonl(baseline_file)
 
-    regressions, _improvements, _new = compare_results(current, baseline)
+    regressions, improvements, new_scenarios = compare_results(current, baseline)
 
     if regressions > 0:
         console.print(f"\n[red]Exiting with code 1 due to {regressions} regression(s).[/red]")
-        sys.exit(1)
-    else:
-        sys.exit(0)
+        raise typer.Exit(1)
+    if strict and (improvements > 0 or new_scenarios > 0):
+        console.print(
+            "\n[red]Exiting with code 1 because --strict requires an exact baseline match.[/red]"
+        )
+        raise typer.Exit(1)
 
 
 @app.command()
