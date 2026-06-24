@@ -100,6 +100,14 @@ View a saved JSONL result as a Rich table:
 uv run --locked --extra dev aegis-redteam view results/fixture-smoke.jsonl
 ```
 
+Open the interactive Textual result browser:
+
+```bash
+uv run --locked --extra dev aegis-redteam tui results/fixture-smoke.jsonl
+```
+
+The TUI shows a scenario table, pass/fail summary, final policy, detector names, failure counts, and a details pane for the selected result. Use arrow keys to move through rows and `q` or `Esc` to quit.
+
 Generate a Markdown report:
 
 ```bash
@@ -127,6 +135,7 @@ uv build
 uv venv /tmp/aegis-redteam-smoke --python 3.11
 uv pip install --python /tmp/aegis-redteam-smoke/bin/python dist/*.whl
 /tmp/aegis-redteam-smoke/bin/aegis-redteam --help
+/tmp/aegis-redteam-smoke/bin/aegis-redteam tui --help
 /tmp/aegis-redteam-smoke/bin/python -c "from aegis_redteam.tui.app import RedteamTUI; print(RedteamTUI.__name__)"
 ```
 
@@ -191,7 +200,7 @@ That gate starts the deterministic fixture target, runs the campaign, replays ge
 - Target doctor for public-contract readiness checks
 - Deterministic campaign generation that emits replayable scenario YAML
 - Rich table viewer for saved JSONL results
-- Textual TUI components available for future interactive result browsing
+- First-class Textual TUI for interactive saved-result browsing
 
 ## Live Target Requirements
 
