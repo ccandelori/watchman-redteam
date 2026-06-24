@@ -5,6 +5,7 @@ from pathlib import Path
 
 from aegis_redteam.models import DetectorResult, PolicyDecision, RedteamResult, TurnResult
 from aegis_redteam.results import load_results_jsonl, write_results_jsonl
+from aegis_redteam.campaigns.validation import validate_unique_scenario_names
 
 BASELINE_TARGET_URL = "baseline://campaign-regression"
 BASELINE_TIMESTAMP = "1970-01-01T00:00:00Z"
@@ -75,6 +76,7 @@ def promote_campaign_baseline(
     results = load_results_jsonl(source_path)
     if len(results) == 0:
         raise ValueError(f"Campaign result source contains no results: {source_path}")
+    validate_unique_scenario_names(results, source_path)
 
     baseline_results = [canonicalize_campaign_baseline_result(result) for result in results]
     write_results_jsonl(baseline_results, baseline_path)

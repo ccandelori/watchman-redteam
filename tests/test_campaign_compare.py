@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from aegis_redteam.campaigns.compare import compare_campaign_results
 from aegis_redteam.models import RedteamResult
 
@@ -45,3 +47,29 @@ def test_compare_campaign_results_returns_existing_compare_counts(tmp_path: Path
     assert comparison.regressions == 1
     assert comparison.improvements == 1
     assert comparison.new_scenarios == 1
+
+
+def test_compare_campaign_results_rejects_duplicate_current_scenario_names(tmp_path: Path) -> None:
+    current_path = tmp_path / "current.jsonl"
+    baseline_path = tmp_path / "baseline.jsonl"
+    write_results(
+        current_path,
+        [make_result("credential_exfil_v1__duplicate", True), make_result("credential_exfil_v1__duplicate", False)],
+    )
+    write_results(baseline_path, [make_result("credential_exfil_v1__duplicate", True)])
+
+    with pytest.raises(ValueError, match="current.jsonl: duplicate scenario_name: credential_exfil_v1__duplicate"):
+        compare_campaign_results(current_path, baseline_path)
+
+
+def test_compare_campaign_results_rejects_duplicate_baseline_scenario_names(tmp_path: Path) -> None:
+    current_path = tmp_path / "current.jsonl"
+    baseline_path = tmp_path / "baseline.jsonl"
+    write_results(current_path, [make_result("credential_exfil_v1__duplicate", True)])
+    write_results(
+        baseline_path,
+        [make_result("credential_exfil_v1__duplicate", True), make_result("credential_exfil_v1__duplicate", False)],
+    )
+
+    with pytest.raises(ValueError, match="baseline.jsonl: duplicate scenario_name: credential_exfil_v1__duplicate"):
+        compare_campaign_results(current_path, baseline_path)

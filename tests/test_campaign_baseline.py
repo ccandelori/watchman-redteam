@@ -197,3 +197,17 @@ def test_promote_campaign_baseline_rejects_empty_source(tmp_path: Path) -> None:
         promote_campaign_baseline(source_path, baseline_path, force=False)
 
     assert not baseline_path.exists()
+
+
+def test_promote_campaign_baseline_rejects_duplicate_scenario_names(tmp_path: Path) -> None:
+    source_path = tmp_path / "campaign.jsonl"
+    baseline_path = tmp_path / "baseline.jsonl"
+    write_results_jsonl(
+        [make_result("credential_exfil_v1__duplicate", True), make_result("credential_exfil_v1__duplicate", True)],
+        source_path,
+    )
+
+    with pytest.raises(ValueError, match="campaign.jsonl: duplicate scenario_name: credential_exfil_v1__duplicate"):
+        promote_campaign_baseline(source_path, baseline_path, force=False)
+
+    assert not baseline_path.exists()

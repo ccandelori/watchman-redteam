@@ -5,6 +5,7 @@ from pathlib import Path
 
 from aegis_redteam.compare import compare_results
 from aegis_redteam.results import load_results_jsonl
+from aegis_redteam.campaigns.validation import validate_unique_scenario_names
 
 
 @dataclass(frozen=True)
@@ -17,6 +18,8 @@ class CampaignComparison:
 def compare_campaign_results(current_path: Path, baseline_path: Path) -> CampaignComparison:
     current = load_results_jsonl(current_path)
     baseline = load_results_jsonl(baseline_path)
+    validate_unique_scenario_names(current, current_path)
+    validate_unique_scenario_names(baseline, baseline_path)
     regressions, improvements, new_scenarios = compare_results(current, baseline)
     return CampaignComparison(
         regressions=regressions,
