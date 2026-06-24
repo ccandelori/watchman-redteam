@@ -19,28 +19,38 @@ def generate_campaign_scenarios(campaign: Campaign) -> list[Scenario]:
     scenarios: list[Scenario] = []
     for variant in campaign.variants:
         scenario_name = f"{campaign.name}__{variant.name}"
+        # Build target controls - support live seed_canary
+        target_controls = TargetControls(
+            mock_response_mode=variant.mock_response_mode,
+            reset_before_run=campaign.reset_before_run,
+            session_id=scenario_name,
+            seed_canary=variant.seed_canary,
+        )
+
+        # Build expected: prefer explicit expected (supports egress) else fall back to flat fields
+        if variant.expected is not None:
+            expected = variant.expected
+        else:
+            expected = Expected(
+                detectors=[
+                    DetectorExpectation(name=detector.name, should_trigger=detector.should_trigger)
+                    for detector in variant.detectors
+                ],
+                policy=PolicyExpectation(min_final_action=variant.min_final_action),
+            )
+
         scenarios.append(
             Scenario(
                 name=scenario_name,
                 description=f"Generated campaign variant {variant.name} from {campaign.name}",
-                target_controls=TargetControls(
-                    mock_response_mode=variant.mock_response_mode,
-                    reset_before_run=campaign.reset_before_run,
-                    session_id=scenario_name,
-                ),
+                target_controls=target_controls,
                 turns=[
                     Turn(
                         role="user",
                         content=variant.prompt.replace("{{credential}}", campaign.credential),
                     )
                 ],
-                expected=Expected(
-                    detectors=[
-                        DetectorExpectation(name=detector.name, should_trigger=detector.should_trigger)
-                        for detector in variant.detectors
-                    ],
-                    policy=PolicyExpectation(min_final_action=variant.min_final_action),
-                ),
+                expected=expected,
             )
         )
     return scenarios

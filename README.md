@@ -166,7 +166,13 @@ Scenario `expected.egress` asserts the target's public egress surfaces before re
 
 Seeded Watchman scenarios should use `/test/reset`, `/test/seed-canary`, and these egress checks to assert that direct, encoded, and partial canary leaks are blocked without returning raw or encoded canary material in `choices` or audit projection. The current Watchman HTTP chat parser does not accept top-level synthetic `tool_calls`, so tool-call handoff scenarios exercise the public prompt/model-output path until Watchman exposes a dedicated tool-call request contract.
 
-Campaigns generate deterministic scenario variants and then reuse the same runner/evaluator path. In a source checkout, see `campaigns/credential_exfil.yaml` for the first v1 campaign. Campaign and variant names must be filesystem-safe slugs matching `^[A-Za-z0-9][A-Za-z0-9_-]*$` because generated scenario files are named from those identifiers.
+Campaigns generate deterministic scenario variants and then reuse the same runner/evaluator path. In a source checkout, see `campaigns/credential_exfil.yaml` for the fixture-oriented campaign and `campaigns/credential_exfil_live.yaml` for a version using the full live-target contract (seed_canary + expected.egress with audit inspection).
+
+Campaign and variant names must be filesystem-safe slugs matching `^[A-Za-z0-9][A-Za-z0-9_-]*$` because generated scenario files are named from those identifiers.
+
+Campaigns now support live target fields on variants:
+- `seed_canary` (for /test/seed-canary)
+- `expected.egress` (assistant_content, forbidden_*_substrings, inspect_audit)
 
 ```bash
 uv run --locked --extra dev aegis-redteam campaign run campaigns/credential_exfil.yaml --target http://127.0.0.1:8799 --output results/campaign-v1.jsonl --generated-dir generated/campaign-v1
