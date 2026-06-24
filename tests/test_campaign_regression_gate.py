@@ -55,3 +55,4 @@ def test_credential_exfil_campaign_matches_committed_baseline(tmp_path: Path) ->
         assert comparison.regressions == 0
         assert comparison.improvements == 0
         assert comparison.new_scenarios == 0
+        assert comparison.changed_scenarios == 0
