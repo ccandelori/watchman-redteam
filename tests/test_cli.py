@@ -350,7 +350,7 @@ def test_campaign_compare_command_exits_zero_without_regressions(
     def fake_compare_campaign_results(current_arg: Path, baseline_arg: Path) -> CampaignComparison:
         assert current_arg == current_path
         assert baseline_arg == baseline_path
-        return CampaignComparison(regressions=0, improvements=1, new_scenarios=2)
+        return CampaignComparison(regressions=0, improvements=1, new_scenarios=2, missing_scenarios=0)
 
     monkeypatch.setattr(cli, "compare_campaign_results", fake_compare_campaign_results)
 
@@ -378,7 +378,7 @@ def test_campaign_compare_command_strict_exits_nonzero_with_new_or_improved_scen
     baseline_path.write_text("", encoding="utf-8")
 
     def fake_compare_campaign_results(current_arg: Path, baseline_arg: Path) -> CampaignComparison:
-        return CampaignComparison(regressions=0, improvements=1, new_scenarios=2)
+        return CampaignComparison(regressions=0, improvements=1, new_scenarios=2, missing_scenarios=0)
 
     monkeypatch.setattr(cli, "compare_campaign_results", fake_compare_campaign_results)
 
@@ -406,7 +406,7 @@ def test_campaign_compare_command_exits_nonzero_with_regressions(
     baseline_path.write_text("", encoding="utf-8")
 
     def fake_compare_campaign_results(current_arg: Path, baseline_arg: Path) -> CampaignComparison:
-        return CampaignComparison(regressions=2, improvements=0, new_scenarios=0)
+        return CampaignComparison(regressions=2, improvements=0, new_scenarios=0, missing_scenarios=0)
 
     monkeypatch.setattr(cli, "compare_campaign_results", fake_compare_campaign_results)
 
@@ -456,6 +456,48 @@ def test_compare_command_strict_exits_nonzero_with_new_scenarios(tmp_path: Path)
 
     assert result.exit_code == 1
     assert "New: 1" in result.output
+    assert "strict" in result.output
+
+
+def test_compare_command_strict_exits_nonzero_with_missing_failed_baseline_scenario(
+    tmp_path: Path,
+) -> None:
+    from aegis_redteam import cli
+    from aegis_redteam.results import write_results_jsonl
+
+    current_path = tmp_path / "current.jsonl"
+    baseline_path = tmp_path / "baseline.jsonl"
+    write_results_jsonl([], current_path)
+    write_results_jsonl([make_failed_result("removed-failing-scenario")], baseline_path)
+
+    result = CliRunner().invoke(
+        cli.app,
+        ["compare", str(current_path), str(baseline_path), "--strict"],
+    )
+
+    assert result.exit_code == 1
+    assert "Missing: 1" in result.output
+    assert "strict" in result.output
+
+
+def test_campaign_compare_command_strict_exits_nonzero_with_missing_failed_baseline_scenario(
+    tmp_path: Path,
+) -> None:
+    from aegis_redteam import cli
+    from aegis_redteam.results import write_results_jsonl
+
+    current_path = tmp_path / "current.jsonl"
+    baseline_path = tmp_path / "baseline.jsonl"
+    write_results_jsonl([], current_path)
+    write_results_jsonl([make_failed_result("removed-failing-scenario")], baseline_path)
+
+    result = CliRunner().invoke(
+        cli.app,
+        ["campaign", "compare", str(current_path), str(baseline_path), "--strict"],
+    )
+
+    assert result.exit_code == 1
+    assert "Missing: 1" in result.output
     assert "strict" in result.output
 
 

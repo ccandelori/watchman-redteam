@@ -6,6 +6,13 @@ from rich.table import Table
 from aegis_redteam.models import RedteamResult
 
 
+def count_missing_baseline_scenarios(
+    current: list[RedteamResult], baseline: list[RedteamResult]
+) -> int:
+    current_names = {result.scenario_name for result in current}
+    return sum(1 for result in baseline if result.scenario_name not in current_names)
+
+
 def compare_results(
     current: list[RedteamResult], baseline: list[RedteamResult]
 ) -> tuple[int, int, int]:

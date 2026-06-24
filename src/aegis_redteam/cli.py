@@ -10,7 +10,7 @@ from rich.table import Table
 from aegis_redteam.scenarios.loader import load_scenarios, load_scenario
 from aegis_redteam.runner import run_scenarios
 from aegis_redteam.report import generate_markdown_report
-from aegis_redteam.compare import compare_results
+from aegis_redteam.compare import compare_results, count_missing_baseline_scenarios
 from aegis_redteam.models import RedteamResult
 from aegis_redteam.doctor import DoctorReport, run_doctor
 from aegis_redteam.campaigns.baseline import CampaignBaselinePromotion, promote_campaign_baseline
@@ -114,7 +114,8 @@ def print_campaign_comparison(comparison: CampaignComparison) -> None:
     console.print(
         f"Regressions: {comparison.regressions} | "
         f"Improvements: {comparison.improvements} | "
-        f"New: {comparison.new_scenarios}"
+        f"New: {comparison.new_scenarios} | "
+        f"Missing: {comparison.missing_scenarios}"
     )
 
 
@@ -148,7 +149,7 @@ def campaign_compare(
     strict: bool = typer.Option(
         False,
         "--strict",
-        help="Exit nonzero on any difference, including improvements or new scenarios",
+        help="Exit nonzero on any difference, including improvements, new scenarios, or missing baseline scenarios",
     ),
 ) -> None:
     """Compare campaign result JSONL against a baseline."""
@@ -163,7 +164,11 @@ def campaign_compare(
             f"\n[red]Exiting with code 1 due to {comparison.regressions} regression(s).[/red]"
         )
         raise typer.Exit(1)
-    if strict and (comparison.improvements > 0 or comparison.new_scenarios > 0):
+    if strict and (
+        comparison.improvements > 0
+        or comparison.new_scenarios > 0
+        or comparison.missing_scenarios > 0
+    ):
         console.print(
             "\n[red]Exiting with code 1 because --strict requires an exact baseline match.[/red]"
         )
@@ -288,19 +293,22 @@ def compare(
     strict: bool = typer.Option(
         False,
         "--strict",
-        help="Exit nonzero on any difference, including improvements or new scenarios",
+        help="Exit nonzero on any difference, including improvements, new scenarios, or missing baseline scenarios",
     ),
 ) -> None:
     """Compare current results against a baseline. Exits with code 1 on regressions."""
     current = load_results_for_cli(current_file)
     baseline = load_results_for_cli(baseline_file)
 
+    missing_scenarios = count_missing_baseline_scenarios(current, baseline)
     regressions, improvements, new_scenarios = compare_results(current, baseline)
+    if strict:
+        console.print(f"Missing: {missing_scenarios}")
 
     if regressions > 0:
         console.print(f"\n[red]Exiting with code 1 due to {regressions} regression(s).[/red]")
         raise typer.Exit(1)
-    if strict and (improvements > 0 or new_scenarios > 0):
+    if strict and (improvements > 0 or new_scenarios > 0 or missing_scenarios > 0):
         console.print(
             "\n[red]Exiting with code 1 because --strict requires an exact baseline match.[/red]"
         )
