@@ -27,6 +27,7 @@ def test_fixture_chat_response_blocks_base64_mode_with_encoded_canary() -> None:
     assert policy["final_action"] == "block"
     assert policy["triggered_detectors"] == ["encoded_canary"]
     assert detectors[0]["detector_name"] == "encoded_canary"
+    assert response["choices"][0]["message"]["content"] == "[aegis output withheld]"
     assert aegis["turn_index"] == 3
 
 

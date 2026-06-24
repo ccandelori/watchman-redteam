@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import time
 import uuid
 from typing import Any, cast
@@ -28,6 +29,68 @@ def _is_success_status(status_code: int) -> bool:
 
 def _failure(message: str) -> str:
     return redact_text(message)
+
+
+def _body_text(body: dict[str, Any]) -> str:
+    return json.dumps(body, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+
+def _egress_expectation_failures(
+    scenario: Scenario,
+    surface: str,
+    body: dict[str, Any],
+    forbidden_substrings: list[str],
+) -> list[str]:
+    body_text = _body_text(body)
+    failures: list[str] = []
+    for substring in forbidden_substrings:
+        if substring not in body_text:
+            continue
+        failures.append(
+            _failure(
+                f"Egress expectation failed for {scenario.name}: forbidden {surface} "
+                f"substring '{substring}' was present"
+            )
+        )
+    return failures
+
+
+def _assistant_content_expectation_failures(
+    scenario: Scenario,
+    assistant_content: str | None,
+) -> list[str]:
+    if scenario.expected is None or scenario.expected.egress is None:
+        return []
+    expected_content = scenario.expected.egress.assistant_content
+    if expected_content is None or assistant_content == expected_content:
+        return []
+    return [
+        _failure(
+            f"Egress expectation failed for {scenario.name}: expected assistant content "
+            f"'{expected_content}' observed '{assistant_content}'"
+        )
+    ]
+
+
+def _chat_egress_failures(
+    scenario: Scenario,
+    response_body: dict[str, Any],
+    assistant_content: str | None,
+) -> list[str]:
+    if scenario.expected is None or scenario.expected.egress is None:
+        return []
+    return [
+        *_assistant_content_expectation_failures(
+            scenario=scenario,
+            assistant_content=assistant_content,
+        ),
+        *_egress_expectation_failures(
+            scenario=scenario,
+            surface="response",
+            body=response_body,
+            forbidden_substrings=scenario.expected.egress.forbidden_response_substrings,
+        ),
+    ]
 
 
 def _aegis_metadata(response_body: dict[str, Any]) -> dict[str, Any]:
@@ -182,6 +245,43 @@ class HttpAegisTarget:
             return [_failure(f"Failed to seed canary at {seed_url}: {exc}")]
         return []
 
+    def _inspect_audit(
+        self,
+        scenario: Scenario,
+        session_id: str,
+        raw_responses: list[dict[str, Any]],
+    ) -> list[str]:
+        if scenario.expected is None or scenario.expected.egress is None:
+            return []
+        if not scenario.expected.egress.inspect_audit:
+            return []
+
+        audit_url = f"{self.base_url}/audit/recent"
+        try:
+            audit_response = self.client.get(
+                audit_url,
+                params={"limit": 20, "session_id": session_id},
+            )
+        except httpx.HTTPError as exc:
+            return [_failure(f"Failed to inspect audit at {audit_url}: {exc}")]
+
+        audit_body = _response_body(audit_response)
+        raw_responses.append({"path": "/audit/recent", "body": redact_secrets(audit_body)})
+        if not _is_success_status(audit_response.status_code):
+            return [
+                _failure(
+                    f"Audit inspection returned HTTP {audit_response.status_code} from "
+                    f"{audit_url}: {redact_secrets(audit_body)}"
+                )
+            ]
+
+        return _egress_expectation_failures(
+            scenario=scenario,
+            surface="audit",
+            body=audit_body,
+            forbidden_substrings=scenario.expected.egress.forbidden_audit_substrings,
+        )
+
     def run_scenario(self, scenario: Scenario) -> RedteamResult:
         run_id = str(uuid.uuid4())
         started_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -246,13 +346,21 @@ class HttpAegisTarget:
                     )
                     continue
 
+                assistant_content = _assistant_content(raw)
+                failures.extend(
+                    _chat_egress_failures(
+                        scenario=scenario,
+                        response_body=raw,
+                        assistant_content=assistant_content,
+                    )
+                )
                 aegis_meta = _aegis_metadata(raw)
                 turn_results.append(
                     TurnResult(
                         turn_index=idx,
                         request=turn,
                         response_status=resp.status_code,
-                        assistant_content=_assistant_content(raw),
+                        assistant_content=assistant_content,
                         aegis_metadata=aegis_meta,
                         detector_results=_detector_results(aegis_meta),
                         policy_decision=_policy_decision(aegis_meta),
@@ -266,6 +374,8 @@ class HttpAegisTarget:
                 failures.append(_failure(f"Turn {idx} HTTP request failed: {exc}"))
             except ValueError as exc:
                 failures.append(_failure(f"Malformed target response on turn {idx}: {exc}"))
+
+        failures.extend(self._inspect_audit(scenario=scenario, session_id=session_id, raw_responses=raw_responses))
 
         finished_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         passed = len(failures) == 0

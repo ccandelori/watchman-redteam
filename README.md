@@ -148,6 +148,15 @@ Scenarios are defined in YAML. In a source checkout, see `scenarios/` for exampl
 
 Scenario `target_controls` are translated into HTTP request `metadata`, including `session_id`, `turn_index`, and optional `mock_response_mode`. When `target_controls.seed_canary` is present, the runner first calls `/test/seed-canary` with the scenario session and requested canary slot/type.
 
+Scenario `expected.egress` asserts the target's public egress surfaces before result redaction:
+
+- `assistant_content` pins the expected returned assistant text, such as `[aegis output withheld]` for `block`/`escalate` policy interventions.
+- `forbidden_response_substrings` are searched in the raw chat response body before persistence redaction.
+- `inspect_audit: true` makes the runner query `/audit/recent?session_id=<scenario session>&limit=20` after the chat turn.
+- `forbidden_audit_substrings` are searched in that raw audit response before persistence redaction.
+
+Seeded Watchman scenarios should use `/test/reset`, `/test/seed-canary`, and these egress checks to assert that direct, encoded, and partial canary leaks are blocked without returning raw or encoded canary material in `choices` or audit projection. The current Watchman HTTP chat parser does not accept top-level synthetic `tool_calls`, so tool-call handoff scenarios exercise the public prompt/model-output path until Watchman exposes a dedicated tool-call request contract.
+
 Campaigns generate deterministic scenario variants and then reuse the same runner/evaluator path. In a source checkout, see `campaigns/credential_exfil.yaml` for the first v1 campaign. Campaign and variant names must be filesystem-safe slugs matching `^[A-Za-z0-9][A-Za-z0-9_-]*$` because generated scenario files are named from those identifiers.
 
 ```bash

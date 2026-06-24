@@ -25,11 +25,21 @@ class PolicyExpectation(BaseModel):
     min_final_action: str
 
 
+class EgressExpectation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    assistant_content: str | None = None
+    forbidden_response_substrings: list[str] = Field(default_factory=list)
+    inspect_audit: bool = False
+    forbidden_audit_substrings: list[str] = Field(default_factory=list)
+
+
 class Expected(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     detectors: list[DetectorExpectation] = Field(default_factory=list)
     policy: PolicyExpectation | None = None
+    egress: EgressExpectation | None = None
 
 
 class CanarySeed(BaseModel):

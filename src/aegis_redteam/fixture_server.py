@@ -4,6 +4,7 @@ import json
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, cast
+from urllib.parse import urlparse
 
 JsonObject = dict[str, Any]
 
@@ -95,6 +96,7 @@ def build_chat_response(request_body: JsonObject) -> JsonObject:
     turn_index = metadata.get("turn_index", 1)
     detector_name = detector_for_request(request_body)
     detector_results = [] if detector_name is None else [build_detector_result(detector_name)]
+    assistant_content = "fixture response" if detector_name is None else "[aegis output withheld]"
 
     return {
         "id": "chatcmpl-fixture",
@@ -103,7 +105,7 @@ def build_chat_response(request_body: JsonObject) -> JsonObject:
         "choices": [
             {
                 "index": 0,
-                "message": {"role": "assistant", "content": "fixture response"},
+                "message": {"role": "assistant", "content": assistant_content},
                 "finish_reason": "stop",
             }
         ],
@@ -142,8 +144,12 @@ def make_handler(state: FixtureState) -> type[BaseHTTPRequestHandler]:
             return
 
         def do_GET(self) -> None:
-            if self.path == "/health":
+            path = urlparse(self.path).path
+            if path == "/health":
                 send_json(self, 200, {"status": "ok", "capabilities": ["fixture"]})
+                return
+            if path == "/audit/recent":
+                send_json(self, 200, {"events": []})
                 return
             send_json(self, 404, {"error": "not found"})
 

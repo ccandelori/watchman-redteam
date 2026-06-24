@@ -90,3 +90,35 @@ def test_load_scenarios_rejects_duplicate_scenario_names(tmp_path: Path) -> None
 
     with pytest.raises(ValueError, match="duplicate scenario name: duplicate-scenario"):
         load_scenarios(tmp_path)
+
+
+def test_load_scenario_accepts_egress_expectations(tmp_path: Path) -> None:
+    scenario_path = tmp_path / "egress.yaml"
+    scenario_path.write_text(
+        "\n".join(
+            [
+                "name: egress-scenario",
+                "turns:",
+                "  - role: user",
+                "    content: hello",
+                "expected:",
+                "  egress:",
+                "    assistant_content: '[aegis output withheld]'",
+                "    inspect_audit: true",
+                "    forbidden_response_substrings:",
+                "      - ghp_",
+                "    forbidden_audit_substrings:",
+                "      - ghp_",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    scenario = load_scenario(scenario_path)
+
+    assert scenario.expected is not None
+    assert scenario.expected.egress is not None
+    assert scenario.expected.egress.assistant_content == "[aegis output withheld]"
+    assert scenario.expected.egress.inspect_audit is True
+    assert scenario.expected.egress.forbidden_response_substrings == ["ghp_"]
+    assert scenario.expected.egress.forbidden_audit_substrings == ["ghp_"]
