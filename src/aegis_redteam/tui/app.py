@@ -15,11 +15,24 @@ def load_results(path: Path) -> list[RedteamResult]:
     return load_results_jsonl(path)
 
 
+def campaign_name(results: list[RedteamResult]) -> str:
+    """Return campaign name if all results are from the same campaign."""
+    campaigns = set()
+    for r in results:
+        cp = campaign_prefix(r)
+        if cp != "-":
+            campaigns.add(cp)
+    if len(campaigns) == 1:
+        return f" | Campaign: {list(campaigns)[0]}"
+    return ""
+
+
 def format_summary(results: list[RedteamResult], source_path: Path | None) -> str:
     passed_count = sum(1 for result in results if result.passed)
     failed_count = len(results) - passed_count
     source = redact_text(str(source_path)) if source_path is not None else "in-memory results"
-    return f"{passed_count}/{len(results)} scenarios passed | {failed_count} failed | Source: {source}"
+    camp = campaign_name(results)
+    return f"{passed_count}/{len(results)} scenarios passed | {failed_count} failed | Source: {source}{camp}"
 
 
 def safe_text(value: str) -> str:
@@ -42,6 +55,14 @@ def final_policy(result: RedteamResult) -> str:
             return safe_text(turn_result.policy_decision.final_action)
     return "-"
 
+
+
+def campaign_prefix(result: RedteamResult) -> str:
+    """Extract campaign name from scenario_name if it follows campaign__variant pattern."""
+    name = result.scenario_name
+    if "__" in name:
+        return name.split("__", 1)[0]
+    return "-"
 
 def failure_count_label(result: RedteamResult) -> str:
     if len(result.failures) == 0:
@@ -134,11 +155,12 @@ class RedteamTUI(App[None]):
         table = self.query_one("#results", DataTable)
         table.cursor_type = "row"
         table.zebra_stripes = True
-        table.add_columns("Scenario", "Status", "Policy", "Detectors", "Failures")
+        table.add_columns("Campaign", "Scenario", "Status", "Policy", "Detectors", "Failures")
 
         for index, result in enumerate(self.results):
             status = "PASS" if result.passed else "FAIL"
             table.add_row(
+                campaign_prefix(result),
                 result.scenario_name,
                 status,
                 final_policy(result),

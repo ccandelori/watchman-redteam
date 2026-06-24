@@ -166,7 +166,13 @@ Scenario `expected.egress` asserts the target's public egress surfaces before re
 
 Seeded Watchman scenarios should use `/test/reset`, `/test/seed-canary`, and these egress checks to assert that direct, encoded, and partial canary leaks are blocked without returning raw or encoded canary material in `choices` or audit projection. The current Watchman HTTP chat parser does not accept top-level synthetic `tool_calls`, so tool-call handoff scenarios exercise the public prompt/model-output path until Watchman exposes a dedicated tool-call request contract.
 
-Campaigns generate deterministic scenario variants and then reuse the same runner/evaluator path. In a source checkout, see `campaigns/credential_exfil.yaml` for the first v1 campaign. Campaign and variant names must be filesystem-safe slugs matching `^[A-Za-z0-9][A-Za-z0-9_-]*$` because generated scenario files are named from those identifiers.
+Campaigns generate deterministic scenario variants and then reuse the same runner/evaluator path. In a source checkout, see `campaigns/credential_exfil.yaml` for the fixture-oriented campaign and `campaigns/credential_exfil_live.yaml` for a version using the full live-target contract (seed_canary + expected.egress with audit inspection).
+
+Campaign and variant names must be filesystem-safe slugs matching `^[A-Za-z0-9][A-Za-z0-9_-]*$` because generated scenario files are named from those identifiers.
+
+Campaigns now support live target fields on variants:
+- `seed_canary` (for /test/seed-canary)
+- `expected.egress` (assistant_content, forbidden_*_substrings, inspect_audit)
 
 ```bash
 uv run --locked --extra dev aegis-redteam campaign run campaigns/credential_exfil.yaml --target http://127.0.0.1:8799 --output results/campaign-v1.jsonl --generated-dir generated/campaign-v1
@@ -211,3 +217,61 @@ Once a real Watchman/Aegis server is available, run:
 ```bash
 uv run --locked --extra dev aegis-redteam run scenarios/ --target http://localhost:8000 --output results/latest.jsonl
 ```
+
+## Live Campaign Baselines (Guidance)
+
+When promoting results from live targets, the baseline promotion still works but the results contain more real-world variance:
+
+```bash
+uv run --locked --extra dev aegis-redteam campaign baseline promote \
+  results/live-campaign.jsonl baselines/live-credential-exfil-v1.jsonl --force
+```
+
+Use `campaign compare` (without `--strict` by default) to detect regressions while tolerating minor drift in live environments.
+
+Fixture baselines (the committed `credential-exfil-v1.jsonl`) remain strict and deterministic for CI.
+
+## Live Campaign Workflow Example
+
+1. Define or use a live-oriented campaign (supports `seed_canary` + `expected.egress`):
+
+```bash
+cat campaigns/credential_exfil_live.yaml
+```
+
+2. Run against fixture (for development) or live target:
+
+```bash
+uv run --locked --extra dev aegis-redteam campaign run \
+  campaigns/credential_exfil_live.yaml \
+  --target http://127.0.0.1:8799 \
+  --output results/live-campaign.jsonl \
+  --generated-dir generated/live-campaign
+```
+
+3. Explore with TUI (now shows Campaign column for generated results):
+
+```bash
+uv run --locked --extra dev aegis-redteam tui results/live-campaign.jsonl
+```
+
+4. Promote to baseline (use without --strict for live):
+
+```bash
+uv run --locked --extra dev aegis-redteam campaign baseline promote \
+  results/live-campaign.jsonl baselines/live-credential-exfil-v1.jsonl --force
+
+uv run --locked --extra dev aegis-redteam campaign compare \
+  results/live-campaign.jsonl baselines/live-credential-exfil-v1.jsonl
+```
+
+See `test_campaigns.py` for the E2E test that runs the live campaign against the fixture and verifies egress assertions.
+
+### Live vs Fixture Baselines
+
+- Fixture baselines are strict and used for CI regression gates (see test_campaign_regression_gate.py).
+- Live baselines are promoted from real target runs and should be compared without --strict to allow for natural variation in responses and timing.
+- The `canonicalize_campaign_baseline_result` always produces deterministic baseline entries for comparison.
+- Use separate files like `baselines/live-credential-exfil-v1.jsonl` for live campaigns.
+
+See `test_campaigns.py` for `test_live_campaign_baseline_promotion_and_compare`.

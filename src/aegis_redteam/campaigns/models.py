@@ -5,6 +5,8 @@ from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from aegis_redteam.models import CanarySeed, Expected
+
 _SAFE_SLUG_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
 
 
@@ -31,6 +33,8 @@ class CampaignVariant(BaseModel):
     mock_response_mode: str
     detectors: list[CampaignDetectorExpectation] = Field(min_length=1)
     min_final_action: str
+    seed_canary: CanarySeed | None = None
+    expected: Expected | None = None
 
     @field_validator("name")
     @classmethod
