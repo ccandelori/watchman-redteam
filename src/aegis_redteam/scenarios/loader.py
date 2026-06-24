@@ -18,6 +18,11 @@ def load_scenarios(directory: Path | str) -> list[Scenario]:
     """Load all .yaml/.yml files from a directory."""
     directory = Path(directory)
     scenarios: list[Scenario] = []
+    seen_names: set[str] = set()
     for file in sorted(directory.glob("*.yaml")) + sorted(directory.glob("*.yml")):
-        scenarios.append(load_scenario(file))
+        scenario = load_scenario(file)
+        if scenario.name in seen_names:
+            raise ValueError(f"duplicate scenario name: {scenario.name}")
+        seen_names.add(scenario.name)
+        scenarios.append(scenario)
     return scenarios

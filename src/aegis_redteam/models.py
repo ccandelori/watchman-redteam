@@ -2,35 +2,47 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class Turn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     role: Literal["user", "assistant"]
     content: str
 
 
 class DetectorExpectation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: str
     should_trigger: bool
 
 
 class PolicyExpectation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     min_final_action: str
 
 
 class Expected(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     detectors: list[DetectorExpectation] = Field(default_factory=list)
     policy: PolicyExpectation | None = None
 
 
 class CanarySeed(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     slot_name: str
     credential_type: str
     turn_index: int
 
 
 class TargetControls(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     mock_response_mode: str | None = None
     reset_before_run: bool = False
     session_id: str | None = None
@@ -38,10 +50,12 @@ class TargetControls(BaseModel):
 
 
 class Scenario(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: str
     description: str | None = None
     target_controls: TargetControls = Field(default_factory=TargetControls)
-    turns: list[Turn]
+    turns: list[Turn] = Field(min_length=1)
     expected: Expected | None = None
 
 

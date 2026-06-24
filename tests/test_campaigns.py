@@ -7,7 +7,7 @@ from aegis_redteam.campaigns.generator import generate_campaign_scenarios, write
 from aegis_redteam.campaigns.loader import load_campaign
 from aegis_redteam.campaigns.models import Campaign, CampaignDetectorExpectation, CampaignVariant
 from aegis_redteam.campaigns.runner import run_campaign
-from aegis_redteam.models import RedteamResult, Scenario
+from aegis_redteam.models import RedteamResult, Scenario, Turn
 from aegis_redteam.scenarios.loader import load_scenarios
 
 
@@ -237,7 +237,11 @@ def test_write_generated_scenarios_round_trips_through_existing_loader(tmp_path:
 def test_write_generated_scenarios_rejects_paths_outside_generated_dir(tmp_path: Path) -> None:
     generated_dir = tmp_path / "generated"
     escape_path = tmp_path / "escape.yaml"
-    scenario = Scenario(name="../escape", description="escape", turns=[])
+    scenario = Scenario(
+        name="../escape",
+        description="escape",
+        turns=[Turn(role="user", content="hello")],
+    )
 
     with pytest.raises(ValueError, match="generated scenario path escapes generated_dir"):
         write_generated_scenarios([scenario], generated_dir)
