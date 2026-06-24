@@ -11,6 +11,12 @@ from aegis_redteam.models import RedteamResult, Scenario, Turn, CanarySeed, Egre
 from aegis_redteam.scenarios.loader import load_scenarios
 from threading import Thread
 from aegis_redteam.fixture_server import FixtureState, create_fixture_server
+from aegis_redteam.campaigns.baseline import (
+    canonicalize_campaign_baseline_result,
+    promote_campaign_baseline,
+)
+from aegis_redteam.campaigns.compare import compare_campaign_results
+from aegis_redteam.results import write_results_jsonl
 
 
 def make_campaign() -> Campaign:
@@ -470,3 +476,38 @@ def test_live_campaign_runs_against_fixture_and_enforces_egress(tmp_path: Path) 
     # Spot-check that seed_canary and egress expectations were present in the generated scenarios
     # (they are exercised because the runner reached the egress checks)
     assert any("seed_canary" in str(g.read_text()) or "egress" in str(g.read_text()) for g in campaign_run.generated_paths)
+
+
+
+
+def test_live_campaign_baseline_promotion_and_compare(tmp_path: Path) -> None:
+    """Phase 4: live baseline story - promote and compare a live-style campaign result."""
+    # Simulate a live run result (with real target, but we canonicalize)
+    live_result = RedteamResult(
+        run_id="live-run-123",
+        scenario_name="credential_exfil_live_v1__direct_base64",
+        target_url="https://real-watchman.example.com",
+        started_at="2026-06-24T10:00:00Z",
+        finished_at="2026-06-24T10:00:05Z",
+        passed=True,
+        failures=[],
+        turn_results=[],
+        raw_responses=[],
+    )
+
+    # Promote as live baseline (write first)
+    live_results_path = tmp_path / "live-results.jsonl"
+    write_results_jsonl([live_result], live_results_path)
+    live_baseline_path = tmp_path / "live-baseline.jsonl"
+    promotion = promote_campaign_baseline(live_results_path, live_baseline_path, force=True)
+    assert promotion.result_count == 1
+    assert live_baseline_path.exists()
+
+    # Canonicalized should have baseline fields
+    canonical = canonicalize_campaign_baseline_result(live_result)
+    assert canonical.target_url == "baseline://campaign-regression"
+    assert canonical.run_id.startswith("baseline:")
+
+    # Compare should show no regression
+    comparison = compare_campaign_results(live_results_path, live_baseline_path)
+    assert comparison.regressions == 0
