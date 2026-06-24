@@ -266,3 +266,12 @@ uv run --locked --extra dev aegis-redteam campaign compare \
 ```
 
 See `test_campaigns.py` for the E2E test that runs the live campaign against the fixture and verifies egress assertions.
+
+### Live vs Fixture Baselines
+
+- Fixture baselines are strict and used for CI regression gates (see test_campaign_regression_gate.py).
+- Live baselines are promoted from real target runs and should be compared without --strict to allow for natural variation in responses and timing.
+- The `canonicalize_campaign_baseline_result` always produces deterministic baseline entries for comparison.
+- Use separate files like `baselines/live-credential-exfil-v1.jsonl` for live campaigns.
+
+See `test_campaigns.py` for `test_live_campaign_baseline_promotion_and_compare`.
