@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from pydantic import ValidationError
 
 from aegis_redteam.scenarios.loader import load_scenario, load_scenarios
 
@@ -24,7 +23,7 @@ def test_load_scenario_rejects_unknown_top_level_field(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    with pytest.raises(ValidationError, match="extra_forbidden"):
+    with pytest.raises(ValueError, match="scenario.yaml: invalid scenario"):
         load_scenario(scenario_path)
 
 
@@ -47,7 +46,7 @@ def test_load_scenario_rejects_misspelled_seed_canary_field(tmp_path: Path) -> N
         encoding="utf-8",
     )
 
-    with pytest.raises(ValidationError, match="extra_forbidden"):
+    with pytest.raises(ValueError, match="scenario.yaml: invalid scenario"):
         load_scenario(scenario_path)
 
 
@@ -63,7 +62,15 @@ def test_load_scenario_rejects_empty_turns(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    with pytest.raises(ValidationError, match="too_short"):
+    with pytest.raises(ValueError, match="scenario.yaml: invalid scenario"):
+        load_scenario(scenario_path)
+
+
+def test_load_scenario_wraps_malformed_yaml_with_path(tmp_path: Path) -> None:
+    scenario_path = tmp_path / "broken.yaml"
+    scenario_path.write_text("name: [unterminated\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="broken.yaml:1"):
         load_scenario(scenario_path)
 
 

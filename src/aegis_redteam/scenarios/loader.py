@@ -2,16 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import yaml
-
 from aegis_redteam.models import Scenario
+from aegis_redteam.yaml_utils import load_yaml_model
 
 
 def load_scenario(path: Path | str) -> Scenario:
     """Load a single scenario from YAML."""
-    path = Path(path)
-    data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    return Scenario.model_validate(data)
+    return load_yaml_model(path, Scenario, "scenario")
 
 
 def load_scenarios(directory: Path | str) -> list[Scenario]:

@@ -97,7 +97,11 @@ def campaign_run(
     ),
 ) -> None:
     """Generate and run deterministic campaign scenarios."""
-    campaign_run_result = run_campaign(campaign_path, target_url, generated_dir)
+    try:
+        campaign_run_result = run_campaign(campaign_path, target_url, generated_dir)
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]", soft_wrap=True)
+        raise typer.Exit(1) from exc
     print_campaign_run_summary(campaign_run_result)
 
     if output is not None:
@@ -182,7 +186,11 @@ def run(
     output: Optional[Path] = typer.Option(None, "--output", "-o", help="Write results to JSONL"),
 ) -> None:
     """Run all scenarios in a directory against Aegis."""
-    scenarios = load_scenarios(scenarios_dir)
+    try:
+        scenarios = load_scenarios(scenarios_dir)
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]", soft_wrap=True)
+        raise typer.Exit(1) from exc
     if not scenarios:
         console.print("[red]No scenarios found.[/red]")
         raise typer.Exit(1)
@@ -236,7 +244,11 @@ def run_one(
     target_url: str = typer.Option("http://localhost:8000", "--target", "-t"),
 ) -> None:
     """Run a single scenario with detailed output."""
-    scenario = load_scenario(scenario_path)
+    try:
+        scenario = load_scenario(scenario_path)
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]", soft_wrap=True)
+        raise typer.Exit(1) from exc
     results = run_scenarios([scenario], target_url)
     result = results[0]
 
