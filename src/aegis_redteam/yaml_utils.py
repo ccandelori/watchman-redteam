@@ -5,8 +5,9 @@ from typing import TypeVar
 
 import yaml
 from pydantic import BaseModel, ValidationError
-from pydantic_core import ErrorDetails
 from yaml.error import MarkedYAMLError, YAMLError
+
+from aegis_redteam.validation_errors import format_validation_error_details
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
 
@@ -39,14 +40,4 @@ def _format_yaml_error(path: Path, exc: YAMLError) -> str:
 
 
 def _format_validation_error(path: Path, model_name: str, exc: ValidationError) -> str:
-    details = [_format_validation_detail(error) for error in exc.errors(include_input=False)]
-    return f"{path}: invalid {model_name}: {'; '.join(details)}"
-
-
-def _format_validation_detail(error: ErrorDetails) -> str:
-    location = ".".join(str(part) for part in error["loc"])
-    message = str(error["msg"])
-    error_type = str(error["type"])
-    if location == "":
-        return f"{message} [{error_type}]"
-    return f"{location}: {message} [{error_type}]"
+    return f"{path}: invalid {model_name}: {format_validation_error_details(exc)}"

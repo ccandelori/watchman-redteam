@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from aegis_redteam.models import RedteamResult
 from aegis_redteam.redact import redact_secrets
+from aegis_redteam.validation_errors import format_validation_error_details
 
 
 def load_results_jsonl(path: Path) -> list[RedteamResult]:
@@ -24,7 +25,8 @@ def load_results_jsonl(path: Path) -> list[RedteamResult]:
             except JSONDecodeError as exc:
                 raise ValueError(f"{path}:{line_number}: invalid JSON: {exc.msg}") from exc
             except ValidationError as exc:
-                raise ValueError(f"{path}:{line_number}: invalid RedteamResult: {exc}") from exc
+                detail = format_validation_error_details(exc)
+                raise ValueError(f"{path}:{line_number}: invalid RedteamResult: {detail}") from exc
     return results
 
 
