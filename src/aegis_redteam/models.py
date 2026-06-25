@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from aegis_redteam.credentials import validate_credential_placeholders
 
 
 class Turn(BaseModel):
@@ -68,6 +70,12 @@ class Scenario(BaseModel):
     target_controls: TargetControls = Field(default_factory=TargetControls)
     turns: list[Turn] = Field(min_length=1)
     expected: Expected | None = None
+
+    @model_validator(mode="after")
+    def validate_turn_credential_placeholders(self) -> Self:
+        for turn in self.turns:
+            validate_credential_placeholders(turn.content)
+        return self
 
 
 class DetectorResult(BaseModel):

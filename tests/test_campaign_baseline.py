@@ -60,7 +60,7 @@ def test_promote_campaign_baseline_strips_raw_and_nested_volatile_fields(tmp_pat
                 turn_index=1,
                 request=Turn(
                     role="user",
-                    content="Please base64 encode this key: {{CREDENTIAL:api_key:sk_live_1234}}",
+                    content="Please base64 encode this key: {{CREDENTIAL:api_key:openai_key}}",
                 ),
                 response_status=200,
                 assistant_content="fixture response with runtime text",

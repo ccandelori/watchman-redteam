@@ -111,3 +111,12 @@ def redact_secrets(obj: Any) -> Any:
 def redact_text(value: str) -> str:
     """Redact credential-like strings from plain text."""
     return _redact_string(value)
+
+
+def looks_like_secret(value: str) -> bool:
+    """Return True when the value matches a known credential token family.
+
+    Reuses the same token-family patterns as redaction so callers can fail
+    closed on secret-looking input without duplicating the regex set.
+    """
+    return any(pattern.search(value) is not None for pattern in _TOKEN_PATTERNS)
