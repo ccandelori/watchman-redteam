@@ -38,9 +38,12 @@ jobs:
       - name: Build package
         run: uv build
 
-      - name: Smoke installed wheel
+      - name: Smoke installed wheel (imports + TUI)
         run: |
           python -m venv /tmp/aegis-redteam-smoke
           /tmp/aegis-redteam-smoke/bin/python -m pip install dist/*.whl
           /tmp/aegis-redteam-smoke/bin/aegis-redteam --help
           /tmp/aegis-redteam-smoke/bin/python -c "from aegis_redteam.tui.app import RedteamTUI; print(RedteamTUI.__name__)"
+
+      - name: Smoke installed wheel against HTTP fixture
+        run: bash scripts/installed_wheel_smoke.sh
