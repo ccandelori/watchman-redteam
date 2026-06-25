@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Optional, Sequence
 
@@ -21,6 +22,7 @@ from aegis_redteam.campaigns.baseline import CampaignBaselinePromotion, promote_
 from aegis_redteam.campaigns.compare import CampaignComparison, compare_campaign_results
 from aegis_redteam.campaigns.runner import CampaignRun, run_campaign
 from aegis_redteam.results import load_results_jsonl, write_results_jsonl
+from aegis_redteam.summary import print_summary, summarize_results
 from aegis_redteam.tui.app import launch_tui
 
 app = typer.Typer(help="Aegis Redteam Runner")
@@ -299,6 +301,22 @@ def view(results_file: Path) -> None:
         table.add_row(result.scenario_name, status, policy)
 
     console.print(table)
+
+
+@app.command()
+def summary(
+    results_file: Path,
+    json_output: bool = typer.Option(
+        False, "--json", help="Emit a machine-readable JSON summary for agents/automation"
+    ),
+) -> None:
+    """Summarize saved JSONL results, grouping failures by root-cause category."""
+    results = load_results_for_cli(results_file)
+    if json_output:
+        run_summary = summarize_results(results)
+        print(json.dumps(run_summary.to_json_dict(), sort_keys=True))
+        return
+    print_summary(results)
 
 
 @app.command("tui")
