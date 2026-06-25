@@ -1,158 +1,77 @@
-# Aegis HTTP Contract (v0)
+# Aegis HTTP Target Contract
 
-This document defines the HTTP interface that Aegis exposes for black-box interaction. It is the target contract for `HttpAegisTarget` in the redteam framework.
-
-## Base Assumptions
-
-- Aegis exposes an OpenAI-compatible chat completions endpoint.
-- Chat responses include a required top-level `aegis` metadata block containing detector results, a policy decision, and trace identifiers when available.
-- The service is intended to run locally during development and testing.
-- No authentication is required in the initial version.
+This document is the authoritative reference for how `HttpAegisTarget` talks to an
+Aegis/Watchman HTTP target. It treats the target as a black box: the runner never
+generates model responses, it only drives requests and asserts on responses.
 
 ## Endpoints
 
-### `GET /health`
+| Endpoint | Method | When called |
+| --- | --- | --- |
+| `/test/reset` | POST | Before the run when `target_controls.reset_before_run` is true |
+| `/test/seed-canary` | POST | After reset and before chat when `target_controls.seed_canary` is set |
+| `/v1/chat/completions` | POST | Once per `user` turn in the scenario |
+| `/audit/recent` | GET | After the chat turns when `expected.egress.inspect_audit` is true |
 
-Purpose: health check and basic capability reporting.
+Any non-2xx response on reset, seed-canary, or chat is a target failure. 3xx
+redirects are treated as failures because they usually indicate auth/proxy
+misconfiguration rather than a valid contract response.
 
-Example response:
-
-```json
-{
-  "status": "ok",
-  "version": "0.1.0",
-  "capabilities": ["cift", "dp_honey", "nimbus"]
-}
-```
-
-### `POST /test/reset`
-
-Purpose: reset target-side test/session state before a scenario when `target_controls.reset_before_run` is true.
-
-Expected response: any 2xx status. Non-2xx responses are treated as redteam run failures.
-
-### `POST /test/seed-canary`
-
-Purpose: plant a target-side canary before a scenario asks Aegis to leak the first honeytoken. Scenarios use this when they intentionally do not include a `{{CREDENTIAL:...}}` placeholder in the chat turn. The `doctor` command also probes this endpoint with a synthetic `doctor-probe` session.
-
-Request:
-
-```json
-{
-  "session_id": "leak-smoke",
-  "slot_name": "api_key",
-  "credential_type": "openai_key",
-  "turn_index": 0
-}
-```
-
-Expected response: any 2xx status. Non-2xx responses are treated as redteam run failures.
-
-### `POST /v1/chat/completions`
-
-Primary OpenAI-compatible chat endpoint.
-
-#### Request
-
-The runner sends standard OpenAI-style chat fields and translates scenario `target_controls` into request `metadata`.
+## Chat request shape
 
 ```json
 {
   "model": "mock",
-  "messages": [
-    {"role": "user", "content": "..."}
-  ],
+  "messages": [{"role": "user", "content": "..."}],
   "metadata": {
-    "session_id": "base64-exfil-smoke",
+    "session_id": "<scenario session>",
     "turn_index": 1,
-    "mock_response_mode": "base64_first_honeytoken"
+    "mock_response_mode": "<optional fixture mode>"
   }
 }
 ```
 
-#### Response
+- `metadata.turn_index` is 1-based and equals the position of the turn within the
+  scenario's `turns` list (it is not a count of user turns). Non-user turns occupy
+  positions too, so a `user` turn at list index 2 reports `turn_index: 3`.
+- `metadata.session_id` defaults to `target_controls.session_id`, falling back to the
+  scenario name. It is stable across all turns in a scenario.
 
-The response must be OpenAI-compatible enough for the runner to read assistant content from `choices[0].message.content` when present. The Aegis metadata block is required.
+## Multi-turn semantics: `history_mode`
 
-Minimal valid allow response:
+Multi-turn scenarios contain more than one turn. How prior turns reach the target is
+controlled by `target_controls.history_mode`, an explicit enum rather than implicit
+behavior:
 
-```json
-{
-  "choices": [
-    {
-      "message": {"role": "assistant", "content": "..."}
-    }
-  ],
-  "aegis": {
-    "detector_results": [],
-    "policy_decision": {
-      "final_action": "allow",
-      "triggered_detectors": []
-    }
-  }
-}
-```
+| Mode | `messages` payload per chat call | Use when |
+| --- | --- | --- |
+| `latest_user` (default) | Only the current `user` turn | The target owns conversation memory and reconstructs history server-side keyed by `metadata.session_id` |
+| `full_history` | All turns (user and assistant) up to and including the current turn | The target is a stateless OpenAI-compatible server that expects the full transcript on every request |
 
-Detector response shape:
+`latest_user` is the default to preserve the original Watchman contract, where the
+proxy persists session state by `session_id`. A multi-turn scenario in `latest_user`
+mode therefore only exercises real multi-turn behavior if the target actually stores
+history server-side; otherwise each request is seen in isolation.
 
-```json
-{
-  "id": "chatcmpl-trace-abc123",
-  "object": "chat.completion",
-  "model": "mock",
-  "choices": [
-    {
-      "index": 0,
-      "message": {"role": "assistant", "content": "..."},
-      "finish_reason": "stop"
-    }
-  ],
-  "aegis": {
-    "trace_id": "trace-abc123",
-    "policy_decision": {
-      "final_action": "block",
-      "reason": "highest severity detector fired",
-      "triggered_detectors": ["encoded_canary"],
-      "risk_score": 1.0,
-      "sanitized_output": null
-    },
-    "detector_results": [
-      {
-        "detector_name": "encoded_canary",
-        "component": "post_generation",
-        "score": 1.0,
-        "confidence": 1.0,
-        "recommended_action": "block",
-        "capability_required": false,
-        "capability_status": "available",
-        "evidence": {},
-        "latency_ms": 0.1
-      }
-    ]
-  }
-}
-```
+`full_history` accumulates the transcript so multi-turn attacks (for example drip
+leakage across turns) can be exercised against stateless targets without relying on
+target-side memory. `turn_index` and `session_id` are identical in both modes — only
+the `messages` array differs.
 
-`HttpAegisTarget` fails closed when required fields are missing or malformed:
+### Example
 
-- top-level `aegis`
-- `aegis.detector_results`
-- `aegis.policy_decision`
-- `aegis.policy_decision.final_action`
-- `aegis.detector_results[*].detector_name` or `aegis.detector_results[*].name`
+Scenario turns: `user "u1"`, `assistant "a1"`, `user "u2"`.
 
-`HttpAegisTarget` treats every non-2xx chat response as a failed turn and includes the response status and redacted body in `RedteamResult.failures`.
+- `latest_user`: first chat call sends `[u1]`, second sends `[u2]`.
+- `full_history`: first chat call sends `[u1]`, second sends `[u1, a1, u2]`.
 
-### `GET /audit/recent`
+Assistant turns are never sent as standalone chat requests in either mode; they only
+appear inside the `full_history` transcript as prior context.
 
-Returns recent audit events for analysis. This endpoint is optional for the redteam runner v0 and is not required by the current CLI scenario execution path.
+## Seed canary ordering
 
-## Live Target Requirements
-
-A live encoded-leakage E2E run requires a running Aegis HTTP server exposing `/health`, `/test/reset`, and `/v1/chat/completions`. The deterministic fixture server in this repository is only a redteam-owned smoke target for validating the runner path.
-
-Expected live smoke command from a source checkout:
-
-```bash
-uv run --locked --extra dev aegis-redteam run scenarios/ --target http://localhost:8000 --output results/latest.jsonl
-```
+When `target_controls.seed_canary` is present the runner calls `/test/seed-canary`
+after `/test/reset` and before the first chat turn, using the scenario `session_id`
+and the requested `slot_name`, `credential_type`, and explicit `turn_index`. The
+third field of an inline `{{CREDENTIAL:slot:type}}` placeholder is a *type label*
+(e.g. `openai_key`), not a literal secret value.

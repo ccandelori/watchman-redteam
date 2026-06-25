@@ -691,3 +691,130 @@ def test_http_target_marks_audit_forbidden_substring_as_failure() -> None:
         ]
         assert token not in str(result.raw_responses)
         target.close()
+
+
+def _ok_chat_response() -> Response:
+    return Response(
+        200,
+        json={
+            "choices": [{"message": {"content": "mocked response"}}],
+            "aegis": {"detector_results": [], "policy_decision": {"final_action": "allow"}},
+        },
+    )
+
+
+def test_http_target_latest_user_history_mode_is_default_and_sends_single_message() -> None:
+    base_url = "http://localhost:8000"
+    scenario = Scenario(
+        name="multi-turn-default",
+        turns=[
+            Turn(role="user", content="first user turn"),
+            Turn(role="assistant", content="prior assistant turn"),
+            Turn(role="user", content="second user turn"),
+        ],
+        target_controls=TargetControls(),
+    )
+
+    assert scenario.target_controls.history_mode == "latest_user"
+
+    with respx.mock:
+        route = respx.post(f"{base_url}/v1/chat/completions").mock(
+            side_effect=[_ok_chat_response(), _ok_chat_response()]
+        )
+
+        target = HttpAegisTarget(base_url)
+        result = target.run_scenario(scenario)
+
+        assert result.passed is True
+        assert len(route.calls) == 2
+
+        first_payload = json.loads(route.calls[0].request.content.decode("utf-8"))
+        second_payload = json.loads(route.calls[1].request.content.decode("utf-8"))
+
+        assert first_payload["messages"] == [{"role": "user", "content": "first user turn"}]
+        assert second_payload["messages"] == [{"role": "user", "content": "second user turn"}]
+        assert first_payload["metadata"]["turn_index"] == 1
+        assert second_payload["metadata"]["turn_index"] == 3
+        target.close()
+
+
+def test_http_target_full_history_mode_sends_accumulated_transcript() -> None:
+    base_url = "http://localhost:8000"
+    scenario = Scenario(
+        name="multi-turn-full-history",
+        turns=[
+            Turn(role="user", content="first user turn"),
+            Turn(role="assistant", content="prior assistant turn"),
+            Turn(role="user", content="second user turn"),
+        ],
+        target_controls=TargetControls(history_mode="full_history"),
+    )
+
+    with respx.mock:
+        route = respx.post(f"{base_url}/v1/chat/completions").mock(
+            side_effect=[_ok_chat_response(), _ok_chat_response()]
+        )
+
+        target = HttpAegisTarget(base_url)
+        result = target.run_scenario(scenario)
+
+        assert result.passed is True
+        assert len(route.calls) == 2
+
+        first_payload = json.loads(route.calls[0].request.content.decode("utf-8"))
+        second_payload = json.loads(route.calls[1].request.content.decode("utf-8"))
+
+        assert first_payload["messages"] == [{"role": "user", "content": "first user turn"}]
+        assert second_payload["messages"] == [
+            {"role": "user", "content": "first user turn"},
+            {"role": "assistant", "content": "prior assistant turn"},
+            {"role": "user", "content": "second user turn"},
+        ]
+        assert first_payload["metadata"]["turn_index"] == 1
+        assert second_payload["metadata"]["turn_index"] == 3
+        target.close()
+
+
+def test_http_target_full_history_includes_non_user_turns_latest_user_excludes_them() -> None:
+    base_url = "http://localhost:8000"
+    turns = [
+        Turn(role="user", content="u1"),
+        Turn(role="assistant", content="a1"),
+        Turn(role="user", content="u2"),
+    ]
+
+    latest_scenario = Scenario(
+        name="latest-excludes-assistant",
+        turns=turns,
+        target_controls=TargetControls(history_mode="latest_user"),
+    )
+    full_scenario = Scenario(
+        name="full-includes-assistant",
+        turns=turns,
+        target_controls=TargetControls(history_mode="full_history"),
+    )
+
+    with respx.mock:
+        latest_route = respx.post(f"{base_url}/v1/chat/completions").mock(
+            side_effect=[_ok_chat_response(), _ok_chat_response()]
+        )
+
+        target = HttpAegisTarget(base_url)
+        target.run_scenario(latest_scenario)
+
+        for call in latest_route.calls:
+            payload = json.loads(call.request.content.decode("utf-8"))
+            assert all(message["role"] == "user" for message in payload["messages"])
+        target.close()
+
+    with respx.mock:
+        full_route = respx.post(f"{base_url}/v1/chat/completions").mock(
+            side_effect=[_ok_chat_response(), _ok_chat_response()]
+        )
+
+        target = HttpAegisTarget(base_url)
+        target.run_scenario(full_scenario)
+
+        second_payload = json.loads(full_route.calls[1].request.content.decode("utf-8"))
+        assert any(message["role"] == "assistant" for message in second_payload["messages"])
+        target.close()
