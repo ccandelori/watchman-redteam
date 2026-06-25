@@ -4,9 +4,28 @@ import json
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, cast
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 JsonObject = dict[str, Any]
+
+# Deterministic audit-safe leak token used only when a scenario explicitly
+# requests the audit_leak directive. It is a recognizable secret-family token so
+# redteam egress assertions and redaction can be exercised, kept out of the
+# default audit-safe path.
+_AUDIT_LEAK_TOKEN = "ghp_" + "A" * 36
+
+
+@dataclass(frozen=True)
+class SeededCanary:
+    slot_name: str
+    credential_type: str
+    turn_index: int
+
+
+@dataclass
+class SessionState:
+    seeded_canaries: list[SeededCanary] = field(default_factory=list)
+    audit_events: list[JsonObject] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -18,6 +37,12 @@ class RecordedRequest:
 @dataclass
 class FixtureState:
     requests: list[RecordedRequest] = field(default_factory=list)
+    sessions: dict[str, SessionState] = field(default_factory=dict)
+
+    def session(self, session_id: str) -> SessionState:
+        if session_id not in self.sessions:
+            self.sessions[session_id] = SessionState()
+        return self.sessions[session_id]
 
 
 def latest_user_content(request_body: JsonObject) -> str:
@@ -41,6 +66,20 @@ def metadata_from_request(request_body: JsonObject) -> JsonObject:
     if not isinstance(metadata, dict):
         return {}
     return cast(JsonObject, metadata)
+
+
+def fixture_directive(request_body: JsonObject) -> str | None:
+    directive = metadata_from_request(request_body).get("fixture_directive")
+    if isinstance(directive, str):
+        return directive
+    return None
+
+
+def session_id_from_request(request_body: JsonObject) -> str | None:
+    session_id = metadata_from_request(request_body).get("session_id")
+    if isinstance(session_id, str):
+        return session_id
+    return None
 
 
 def detector_for_request(request_body: JsonObject) -> str | None:
@@ -94,11 +133,12 @@ def build_policy_decision(detector_name: str | None) -> JsonObject:
 def build_chat_response(request_body: JsonObject) -> JsonObject:
     metadata = metadata_from_request(request_body)
     turn_index = metadata.get("turn_index", 1)
+    directive = fixture_directive(request_body)
     detector_name = detector_for_request(request_body)
     detector_results = [] if detector_name is None else [build_detector_result(detector_name)]
     assistant_content = "fixture response" if detector_name is None else "[aegis output withheld]"
 
-    return {
+    response: JsonObject = {
         "id": "chatcmpl-fixture",
         "object": "chat.completion",
         "model": "mock",
@@ -109,13 +149,40 @@ def build_chat_response(request_body: JsonObject) -> JsonObject:
                 "finish_reason": "stop",
             }
         ],
-        "aegis": {
-            "trace_id": "trace-fixture",
-            "turn_index": turn_index,
-            "detector_results": detector_results,
-            "policy_decision": build_policy_decision(detector_name),
-        },
     }
+
+    if directive == "malformed_missing_aegis":
+        return response
+
+    aegis: JsonObject = {
+        "trace_id": "trace-fixture",
+        "turn_index": turn_index,
+        "detector_results": detector_results,
+    }
+    if directive != "malformed_missing_policy":
+        aegis["policy_decision"] = build_policy_decision(detector_name)
+    response["aegis"] = aegis
+    return response
+
+
+def build_audit_event(
+    session_id: str,
+    session_state: SessionState,
+    request_body: JsonObject,
+) -> JsonObject:
+    detector_name = detector_for_request(request_body)
+    policy = build_policy_decision(detector_name)
+    slots = [canary.slot_name for canary in session_state.seeded_canaries]
+    event: JsonObject = {
+        "session_id": session_id,
+        "turn_index": metadata_from_request(request_body).get("turn_index", 1),
+        "final_action": policy["final_action"],
+        "triggered_detectors": policy["triggered_detectors"],
+        "honeytoken_slot": slots[0] if len(slots) > 0 else None,
+    }
+    if fixture_directive(request_body) == "audit_leak":
+        event["leaked_value"] = _AUDIT_LEAK_TOKEN
+    return event
 
 
 def read_json_body(handler: BaseHTTPRequestHandler) -> JsonObject:
@@ -138,18 +205,36 @@ def send_json(handler: BaseHTTPRequestHandler, status_code: int, payload: JsonOb
     handler.wfile.write(encoded)
 
 
+def recent_audit_events(state: FixtureState, session_id: str | None, limit: int) -> list[JsonObject]:
+    if session_id is not None:
+        session_state = state.sessions.get(session_id)
+        events = list(session_state.audit_events) if session_state is not None else []
+    else:
+        events = [event for session in state.sessions.values() for event in session.audit_events]
+    return events[-limit:] if limit > 0 else events
+
+
 def make_handler(state: FixtureState) -> type[BaseHTTPRequestHandler]:
     class AegisFixtureHandler(BaseHTTPRequestHandler):
         def log_message(self, format: str, *args: object) -> None:
             return
 
         def do_GET(self) -> None:
-            path = urlparse(self.path).path
-            if path == "/health":
+            parsed = urlparse(self.path)
+            if parsed.path == "/health":
                 send_json(self, 200, {"status": "ok", "capabilities": ["fixture"]})
                 return
-            if path == "/audit/recent":
-                send_json(self, 200, {"events": []})
+            if parsed.path == "/audit/recent":
+                query = parse_qs(parsed.query)
+                session_values = query.get("session_id")
+                session_id = session_values[0] if session_values else None
+                limit_values = query.get("limit")
+                limit = int(limit_values[0]) if limit_values else 20
+                send_json(
+                    self,
+                    200,
+                    {"events": recent_audit_events(state, session_id, limit)},
+                )
                 return
             send_json(self, 404, {"error": "not found"})
 
@@ -158,15 +243,44 @@ def make_handler(state: FixtureState) -> type[BaseHTTPRequestHandler]:
             state.requests.append(RecordedRequest(path=self.path, body=body))
 
             if self.path == "/test/reset":
+                state.sessions.clear()
                 send_json(self, 200, {"status": "reset"})
                 return
             if self.path == "/test/seed-canary":
+                self._record_seed(body)
                 send_json(self, 200, {"status": "seeded"})
                 return
             if self.path == "/v1/chat/completions":
+                self._record_audit(body)
                 send_json(self, 200, build_chat_response(body))
                 return
             send_json(self, 404, {"error": "not found"})
+
+        def _record_seed(self, body: JsonObject) -> None:
+            session_id = body.get("session_id")
+            if not isinstance(session_id, str):
+                return
+            slot_name = body.get("slot_name")
+            credential_type = body.get("credential_type")
+            turn_index = body.get("turn_index")
+            if not (isinstance(slot_name, str) and isinstance(credential_type, str)):
+                return
+            state.session(session_id).seeded_canaries.append(
+                SeededCanary(
+                    slot_name=slot_name,
+                    credential_type=credential_type,
+                    turn_index=turn_index if isinstance(turn_index, int) else 0,
+                )
+            )
+
+        def _record_audit(self, body: JsonObject) -> None:
+            session_id = session_id_from_request(body)
+            if session_id is None:
+                return
+            session_state = state.session(session_id)
+            session_state.audit_events.append(
+                build_audit_event(session_id, session_state, body)
+            )
 
     return AegisFixtureHandler
 

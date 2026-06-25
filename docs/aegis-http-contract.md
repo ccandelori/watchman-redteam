@@ -113,3 +113,45 @@ secrets into the corpus. Correct: `{{CREDENTIAL:api_key:openai_key}}`. Rejected:
 Note: `forbidden_response_substrings`/`forbidden_audit_substrings` entries such as
 `"sk_live_"` are unaffected — validation only inspects the type field *inside* a
 `{{CREDENTIAL:…}}` placeholder.
+
+## Deterministic fixture capabilities
+
+The redteam-owned fixture server (`aegis-redteam serve-fixture`) is a deterministic,
+black-box-preserving stand-in for a real Aegis/Watchman target. It advertises
+`capabilities: ["fixture"]` on `/health` so `doctor` classifies it as a fixture. Its
+behavior is driven entirely by request metadata, never by any secret value in the
+prompt.
+
+### Session-keyed state
+
+Fixture state is keyed by `metadata.session_id`:
+
+- `/test/seed-canary` records the seeded canary (`slot_name`, `credential_type`,
+  `turn_index`) under its session.
+- `/v1/chat/completions` appends an audit event to its session.
+- `/audit/recent?session_id=<id>&limit=<n>` returns the most recent events for that
+  session; omitting `session_id` returns events across all sessions.
+- `/test/reset` clears all session state (seeded canaries and audit events). It does
+  not clear the in-process request-recording log used by tests.
+
+### Audit-safe by default
+
+Audit events use neutral field names (`session_id`, `turn_index`, `final_action`,
+`triggered_detectors`, `honeytoken_slot`) and never contain a secret value. The
+`honeytoken_slot` field reports the seeded slot label (e.g. `api_key`), not a
+credential.
+
+### Test-only directives
+
+A scenario may set `metadata.fixture_directive` to exercise edge cases. These are
+fixture capabilities for redteam runner testing, not part of the real target
+contract:
+
+| Directive | Effect |
+| --- | --- |
+| `audit_leak` | Audit event includes a recognizable secret-family token, so egress assertions and redaction can be exercised |
+| `malformed_missing_aegis` | Chat response omits the top-level `aegis` object |
+| `malformed_missing_policy` | Chat response omits `aegis.policy_decision` |
+
+The malformed directives let tests assert the runner reports a clean target failure
+rather than a traceback.
