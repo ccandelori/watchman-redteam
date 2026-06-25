@@ -899,3 +899,68 @@ def test_campaign_baseline_promote_command_exits_nonzero_when_baseline_exists(
 
     assert result.exit_code == 1
     assert "Baseline already exists" in result.output
+
+
+def test_summary_command_human_output_groups_by_category(tmp_path: Path) -> None:
+    from aegis_redteam import cli
+    from aegis_redteam.results import write_results_jsonl
+
+    results_path = tmp_path / "results.jsonl"
+    passing = make_failed_result("pass").model_copy(update={"passed": True, "failures": []})
+    detector_fail = make_failed_result("detfail").model_copy(
+        update={
+            "failures": [
+                "Detector expectation failed for detfail: text_canary "
+                "expected triggered=True observed triggered=False"
+            ]
+        }
+    )
+    target_fail = make_failed_result("targetfail").model_copy(
+        update={
+            "failures": [
+                "Turn 1 returned HTTP 500 from http://localhost:8000/v1/chat/completions: {}"
+            ]
+        }
+    )
+    write_results_jsonl([passing, detector_fail, target_fail], results_path)
+
+    result = CliRunner().invoke(cli.app, ["summary", str(results_path)])
+
+    assert result.exit_code == 0
+    assert "1/3 passed" in result.output
+    assert "detector_expectation" in result.output
+    assert "target_contract" in result.output
+
+
+def test_summary_command_json_output_is_machine_readable(tmp_path: Path) -> None:
+    from aegis_redteam import cli
+    from aegis_redteam.results import write_results_jsonl
+
+    results_path = tmp_path / "results.jsonl"
+    detector_fail = make_failed_result("detfail").model_copy(
+        update={
+            "failures": [
+                "Detector expectation failed for detfail: text_canary "
+                "expected triggered=True observed triggered=False"
+            ]
+        }
+    )
+    write_results_jsonl([detector_fail], results_path)
+
+    result = CliRunner().invoke(cli.app, ["summary", str(results_path), "--json"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["total"] == 1
+    assert payload["failed"] == 1
+    assert payload["category_counts"]["detector_expectation"] == 1
+    assert payload["failed_scenarios"][0]["scenario_name"] == "detfail"
+
+
+def test_summary_command_missing_file_exits_nonzero(tmp_path: Path) -> None:
+    from aegis_redteam import cli
+
+    result = CliRunner().invoke(cli.app, ["summary", str(tmp_path / "missing.jsonl")])
+
+    assert result.exit_code == 1
+    assert "File not found" in result.output
