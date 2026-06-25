@@ -57,6 +57,7 @@ class TargetControls(BaseModel):
     reset_before_run: bool = False
     session_id: str | None = None
     seed_canary: CanarySeed | None = None
+    history_mode: Literal["latest_user", "full_history"] = "latest_user"
 
 
 class Scenario(BaseModel):

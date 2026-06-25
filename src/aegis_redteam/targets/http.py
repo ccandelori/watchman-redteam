@@ -201,6 +201,16 @@ def _policy_decision(aegis_metadata: dict[str, Any]) -> PolicyDecision | None:
     )
 
 
+def _build_messages(scenario: Scenario, current_index: int) -> list[dict[str, str]]:
+    current_turn = scenario.turns[current_index - 1]
+    if scenario.target_controls.history_mode == "full_history":
+        return [
+            {"role": turn.role, "content": turn.content}
+            for turn in scenario.turns[:current_index]
+        ]
+    return [{"role": current_turn.role, "content": current_turn.content}]
+
+
 class HttpAegisTarget:
     """Black-box HTTP target for Aegis."""
 
@@ -317,7 +327,7 @@ class HttpAegisTarget:
 
             payload = {
                 "model": "mock",
-                "messages": [{"role": "user", "content": turn.content}],
+                "messages": _build_messages(scenario, idx),
                 "metadata": metadata,
             }
 
