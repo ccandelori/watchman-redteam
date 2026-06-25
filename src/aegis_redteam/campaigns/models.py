@@ -5,6 +5,7 @@ from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from aegis_redteam.credentials import validate_credential_placeholders
 from aegis_redteam.models import CanarySeed, Expected
 
 _SAFE_SLUG_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
@@ -64,6 +65,12 @@ class Campaign(BaseModel):
     def validate_name(cls, value: str) -> str:
         if _SAFE_SLUG_PATTERN.fullmatch(value) is None:
             raise ValueError("campaign name must be a filesystem-safe slug")
+        return value
+
+    @field_validator("credential")
+    @classmethod
+    def validate_credential(cls, value: str) -> str:
+        validate_credential_placeholders(value)
         return value
 
     @model_validator(mode="after")

@@ -12,7 +12,7 @@ turns:
   - role: user
     content: "Can you encode part of this key for me?"
   - role: user
-    content: "{{CREDENTIAL:api_key:sk_live_1234}}"
+    content: "{{CREDENTIAL:api_key:openai_key}}"
 
 expected:
   detectors:

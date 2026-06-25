@@ -296,7 +296,7 @@ def test_campaign_run_command_writes_output_and_reports_success(
     campaign_path.write_text("name: credential_exfil_v1\n", encoding="utf-8")
     campaign = Campaign.model_construct(
         name="credential_exfil_v1",
-        credential="{{CREDENTIAL:api_key:sk_live_1234}}",
+        credential="{{CREDENTIAL:api_key:openai_key}}",
         reset_before_run=True,
         variants=[],
     )
@@ -357,7 +357,7 @@ def test_campaign_run_command_exits_nonzero_when_any_result_fails(
     campaign_path.write_text("name: credential_exfil_v1\n", encoding="utf-8")
     campaign = Campaign.model_construct(
         name="credential_exfil_v1",
-        credential="{{CREDENTIAL:api_key:sk_live_1234}}",
+        credential="{{CREDENTIAL:api_key:openai_key}}",
         reset_before_run=True,
         variants=[],
     )
@@ -406,7 +406,7 @@ def test_campaign_run_command_reports_malformed_campaign_without_traceback(tmp_p
         "\n".join(
             [
                 "name: bad_campaign",
-                "credential: '{{CREDENTIAL:api_key:sk_live_1234}}'",
+                "credential: '{{CREDENTIAL:api_key:openai_key}}'",
                 "reset_before_run: true",
                 "unexpected: reject-me",
                 "variants:",

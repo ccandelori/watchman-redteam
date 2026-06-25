@@ -75,3 +75,41 @@ after `/test/reset` and before the first chat turn, using the scenario `session_
 and the requested `slot_name`, `credential_type`, and explicit `turn_index`. The
 third field of an inline `{{CREDENTIAL:slot:type}}` placeholder is a *type label*
 (e.g. `openai_key`), not a literal secret value.
+
+## Credential placeholders vs canary seeding
+
+There are two distinct, non-interchangeable mechanisms. Confusing them is the most
+common authoring mistake.
+
+### `seed_canary` is the live secret mechanism
+
+`target_controls.seed_canary` (and the campaign variant `seed_canary`) is the only
+path that plants a real honeytoken in the target. The runner calls
+`/test/seed-canary`; the target owns and stores the secret value. Redteam YAML never
+contains the secret. This is the mechanism to use for live-target credential-exfil
+testing.
+
+### Inline `{{CREDENTIAL:slot:type}}` placeholders are literal, unresolved text
+
+The inline placeholder `{{CREDENTIAL:slot_name:type_label}}` is **not** resolved by
+the runner — it is sent to the target verbatim as prompt text. It exists to shape the
+prompt, not to inject a secret. Against the deterministic fixture, leak behavior is
+driven entirely by `mock_response_mode`, not by any value in the placeholder.
+
+The campaign-template marker `{{credential}}` (lowercase, no fields) is a separate
+thing: the campaign generator substitutes it with the campaign-level `credential`
+string when generating scenarios.
+
+### Fail-closed validation
+
+The third placeholder field is a **type label** (e.g. `openai_key`, `github_pat`),
+never a literal secret. If it looks like a known credential token family
+(`sk_live_…`, `sk-proj-…`, `ghp_…`, etc.), scenario and campaign loading fails closed
+with a sanitized error that never echoes the offending value. This prevents authors
+from mistaking the placeholder for secret injection and from committing literal
+secrets into the corpus. Correct: `{{CREDENTIAL:api_key:openai_key}}`. Rejected:
+`{{CREDENTIAL:api_key:sk_live_1234}}`.
+
+Note: `forbidden_response_substrings`/`forbidden_audit_substrings` entries such as
+`"sk_live_"` are unaffected — validation only inspects the type field *inside* a
+`{{CREDENTIAL:…}}` placeholder.
